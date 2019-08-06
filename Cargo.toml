@@ -3,6 +3,9 @@ name = "typeshare"
 version = "0.0.1"
 authors = ["Roustem <roustem@1password.com>"]
 edition = "2018"
+description = "Generate code in different languages from Rust type definitions for FFI interop"
+license-file = "LICENSE"
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
