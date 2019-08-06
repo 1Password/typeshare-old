@@ -1,19 +1,20 @@
 use clap::{App, Arg};
 
 mod language;
-mod typescript;
 mod swift;
+mod typescript;
 use language::Language;
 
 fn main() {
-    let matches = App::new("rust_ftw_gen")
+    let matches = App::new("typeshare")
         .version("v0.0.1")
         .arg(
             Arg::with_name("TYPE")
                 .short("t")
                 .long("type")
                 .help("Output type: java|swift|ts")
-                .required(false)
+                .takes_value(true)
+                .required(false),
         )
         .arg(
             Arg::with_name("input.rs")
@@ -27,9 +28,9 @@ fn main() {
     let mut out = std::io::stdout();
 
     let mut lang: Box<dyn Language> = match matches.value_of("TYPE") {
-        Some("java") => Box::new(typescript::TypeScript{}),
+        Some("java") => Box::new(typescript::TypeScript {}),
         Some("swift") => Box::new(swift::Swift::new()),
-        Some("ts") => Box::new(typescript::TypeScript{}),
+        Some("ts") => Box::new(typescript::TypeScript {}),
         _ => Box::new(swift::Swift::new()),
     };
 
