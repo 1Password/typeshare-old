@@ -5,9 +5,11 @@ mod swift;
 mod typescript;
 use language::Language;
 
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 fn main() {
     let matches = App::new("typeshare")
-        .version("v0.0.1")
+        .version(VERSION)
         .arg(
             Arg::with_name("TYPE")
                 .short("t")
