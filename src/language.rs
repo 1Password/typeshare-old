@@ -41,17 +41,6 @@ pub trait Language {
         Ok(())
     }
 
-    fn process_enum(&mut self, w: &mut dyn Write, e: &syn::ItemEnum) -> std::io::Result<()> {
-        self.process_comment_attrs(w, 0, &e.attrs)?;
-        let ident = ident_as_string(Some(&e.ident));
-        self.write_begin_enum(w, &ident)?;
-        for v in e.variants.iter() {
-            self.process_enum_variant(w, &v)?;
-        }
-        self.write_end_enum(w, &ident)?;
-        Ok(())
-    }
-
     fn process_field(&mut self, w: &mut dyn Write, f: &syn::Field) -> std::io::Result<()> {
         self.process_comment_attrs(w, 1, &f.attrs)?;
 
@@ -73,17 +62,59 @@ pub trait Language {
         Ok(())
     }
 
-    fn process_enum_variant(&mut self, w: &mut dyn Write, v: &syn::Variant) -> std::io::Result<()> {
-        self.process_comment_attrs(w, 1, &v.attrs)?;
-        match v.fields {
-            syn::Fields::Named(_) => {
-                panic!("Can't handle complex enum");
-            }
-            syn::Fields::Unnamed(_) => {}
-            syn::Fields::Unit => {}
+    fn process_enum(&mut self, w: &mut dyn Write, e: &syn::ItemEnum) -> std::io::Result<()> {
+        self.process_comment_attrs(w, 0, &e.attrs)?;
+        if is_const_enum(e) {
+            self.process_const_enum(w, e)?;
+        } else {
+            self.process_algebraic_enum(w, e)?;
         }
 
-        writeln!(w, "\t{} = \"{}\"", v.ident, ident_as_string(Some(&v.ident)))?;
+        Ok(())
+    }
+
+    fn process_const_enum(&mut self, w: &mut dyn Write, e: &syn::ItemEnum) -> std::io::Result<()> {
+        let ident = ident_as_string(Some(&e.ident));
+        self.write_begin_enum(w, &ident)?;
+        for v in e.variants.iter() {
+            self.process_const_enum_variant(w, &v)?;
+        }
+        self.write_end_enum(w, &ident)?;
+        Ok(())
+    }
+
+    fn process_algebraic_enum(
+        &mut self,
+        w: &mut dyn Write,
+        e: &syn::ItemEnum,
+    ) -> std::io::Result<()> {
+        Ok(())
+    }
+
+    fn process_const_enum_variant(
+        &mut self,
+        w: &mut dyn Write,
+        v: &syn::Variant,
+    ) -> std::io::Result<()> {
+        self.process_comment_attrs(w, 1, &v.attrs)?;
+        let value = {
+            if let Some(d) = &v.discriminant {
+                // if d.0 != syn::Token![=] {
+                //     panic!("unexpected token");
+                // }
+
+                match &d.1 {
+                    syn::Expr::Lit(l) => self.lit_value(l),
+                    _ => {
+                        panic!("unexpected expr");
+                    }
+                }
+            } else {
+                "".to_string()
+            }
+        };
+
+        writeln!(w, "\t{} = {},", ident_as_string(Some(&v.ident)), value)?;
         Ok(())
     }
 
@@ -149,6 +180,13 @@ pub trait Language {
         Ok(())
     }
 
+    fn lit_value(&self, l: &syn::ExprLit) -> String {
+        match &l.lit {
+            syn::Lit::Str(s) => s.value(),
+            _ => "nope???".to_string(),
+        }
+    }
+
     //----
 
     fn process_comment_attrs(
@@ -170,6 +208,20 @@ pub trait Language {
 
         Ok(())
     }
+}
+
+fn is_const_enum(e: &syn::ItemEnum) -> bool {
+    for v in e.variants.iter() {
+        match v.fields {
+            syn::Fields::Named(_) => {
+                panic!("Can't handle complex enum");
+            }
+            syn::Fields::Unnamed(_) => return false,
+            syn::Fields::Unit => {}
+        }
+    }
+
+    true
 }
 
 fn type_as_string(ty: &syn::Type) -> String {

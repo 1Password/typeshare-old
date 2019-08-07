@@ -13,5 +13,5 @@ repository = "https://github.com/1Password/typeshare"
 clap = "2.33.0"
 proc-macro2 = "0.4.30"
 quote = "0.6.13"
-syn = { version = "0.15.42", features = ["full", "visit", "printing"] }
+syn = { version = "0.15.42", features = ["full", "visit", "printing", "extra-traits"] }
 

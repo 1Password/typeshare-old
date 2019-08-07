@@ -89,7 +89,29 @@ impl Language for TypeScript {
         )?;
         Ok(())
     }
+
+    fn lit_value(&self, l: &syn::ExprLit) -> String {
+        match &l.lit {
+            syn::Lit::Str(s) => format!(r##""{}""##, s.value()),
+            // syn::Lit::ByteStr(s) => format!("[{}]", &s.value().as_slice()),
+            syn::Lit::Byte(s) => format!("{}", s.value()),
+            syn::Lit::Char(s) => format!("{}", s.value()),
+            syn::Lit::Int(s) => format!("{}", s.value()),
+            syn::Lit::Float(s) => format!("{}", s.value()),
+            syn::Lit::Bool(s) => format!(r##""{}""##, bool_literal(s.value)),
+            // syn::Lit::Verbatim(s) => format!(r##""{}""##, s.to_string()),
+            _ => "nope???".to_string(),
+        }
+    }
 }
+
+fn bool_literal(b: bool) -> String {
+    match b {
+        false => "false".to_string(),
+        true => "true".to_string(),
+    }
+}
+
 fn option_symbol(optional: bool) -> &'static str {
     match optional {
         true => "?",
