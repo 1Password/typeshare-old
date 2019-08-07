@@ -32,21 +32,23 @@ pub trait Language {
 
     fn process_struct(&mut self, w: &mut dyn Write, s: &syn::ItemStruct) -> std::io::Result<()> {
         self.process_comment_attrs(w, 0, &s.attrs)?;
-        self.write_begin_struct(w, &s.ident.to_string())?;
+        let ident = ident_as_string(Some(&s.ident));
+        self.write_begin_struct(w, &ident)?;
         for f in s.fields.iter() {
             self.process_field(w, &f)?;
         }
-        self.write_end_struct(w, &s.ident.to_string())?;
+        self.write_end_struct(w, &ident)?;
         Ok(())
     }
 
     fn process_enum(&mut self, w: &mut dyn Write, e: &syn::ItemEnum) -> std::io::Result<()> {
         self.process_comment_attrs(w, 0, &e.attrs)?;
-        self.write_begin_enum(w, &e.ident.to_string())?;
+        let ident = ident_as_string(Some(&e.ident));
+        self.write_begin_enum(w, &ident)?;
         for v in e.variants.iter() {
             self.process_enum_variant(w, &v)?;
         }
-        self.write_end_enum(w, &e.ident.to_string())?;
+        self.write_end_enum(w, &ident)?;
         Ok(())
     }
 
@@ -59,10 +61,8 @@ pub trait Language {
             ty = remove_prefix_suffix(&ty, OPTION_PREFIX, OPTION_SUFFIX);
         }
 
-        let ident = f
-            .ident
-            .as_ref()
-            .map_or("???".to_string(), |id| id.to_string());
+        let ident = ident_as_string(f.ident.as_ref());
+
         if ty.starts_with(VEC_PREFIX) {
             let ty = &remove_prefix_suffix(&ty, VEC_PREFIX, VEC_SUFFIX);
             self.write_vec_field(w, &ident, optional, ty)?;
@@ -83,7 +83,7 @@ pub trait Language {
             syn::Fields::Unit => {}
         }
 
-        writeln!(w, "\t{} = \"{}\"", v.ident, v.ident.to_string())?;
+        writeln!(w, "\t{} = \"{}\"", v.ident, ident_as_string(Some(&v.ident)))?;
         Ok(())
     }
 
@@ -178,6 +178,10 @@ fn type_as_string(ty: &syn::Type) -> String {
     let mut tokens = proc_macro2::TokenStream::new();
     ty.to_tokens(&mut tokens);
     tokens.to_string()
+}
+
+fn ident_as_string(ident: Option<&proc_macro2::Ident>) -> String {
+    ident.map_or("???".to_string(), |id| id.to_string().replace("r#", ""))
 }
 
 fn remove_prefix_suffix<'a>(src: &'a str, prefix: &'static str, suffix: &'static str) -> &'a str {
