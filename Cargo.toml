@@ -1,6 +1,6 @@
 [package]
 name = "typeshare"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Roustem <roustem@1password.com>"]
 edition = "2018"
 description = "Generate code in different languages from Rust type definitions for FFI interop"
