@@ -1,10 +1,13 @@
 [package]
 name = "typeshare"
 version = "0.0.3"
-authors = ["Roustem <roustem@1password.com>"]
+authors = [
+    "Andrew Beyer <beyer@1password.com>",
+    "Roustem <roustem@1password.com>"
+]
 edition = "2018"
 description = "Generate code in different languages from Rust type definitions for FFI interop"
-license-file = "LICENSE"
+license-file = "MIT"
 repository = "https://github.com/1Password/typeshare"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
