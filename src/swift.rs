@@ -1,5 +1,6 @@
 use std::io::Write;
 
+use crate::language::Id;
 use crate::language::Language;
 
 pub struct Swift {
@@ -54,12 +55,12 @@ impl Language for Swift {
         Ok(())
     }
 
-    fn write_begin_struct(&mut self, w: &mut dyn Write, name: &str) -> std::io::Result<()> {
-        writeln!(w, "public struct {}: Codable {{", name)?;
+    fn write_begin_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
+        writeln!(w, "public struct {}: Codable {{", id.original)?;
         Ok(())
     }
 
-    fn write_end_struct(&mut self, w: &mut dyn Write, _name: &str) -> std::io::Result<()> {
+    fn write_end_struct(&mut self, w: &mut dyn Write, _id: &Id) -> std::io::Result<()> {
         writeln!(w, "\n\tpublic init({}) {{", self.init_params.join(", "))?;
         for f in self.init_fields.iter() {
             writeln!(w, "\t\tself.{} = {}", f, f)?;
@@ -73,12 +74,12 @@ impl Language for Swift {
         Ok(())
     }
 
-    fn write_begin_enum(&mut self, w: &mut dyn Write, name: &str) -> std::io::Result<()> {
-        writeln!(w, "export enum {} {{", name)?;
+    fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
+        writeln!(w, "export enum {} {{", id.original)?;
         Ok(())
     }
 
-    fn write_end_enum(&mut self, w: &mut dyn Write, _name: &str) -> std::io::Result<()> {
+    fn write_end_enum(&mut self, w: &mut dyn Write, _id: &Id) -> std::io::Result<()> {
         writeln!(w, "}}")?;
         Ok(())
     }
@@ -86,14 +87,14 @@ impl Language for Swift {
     fn write_field(
         &mut self,
         w: &mut dyn Write,
-        ident: &str,
+        ident: &Id,
         optional: bool,
         ty: &str,
     ) -> std::io::Result<()> {
         writeln!(
             w,
             "\tpublic let {}: {}{}",
-            ident,
+            ident.original,
             swift_type(ty),
             option_symbol(optional)
         )?;
@@ -106,14 +107,14 @@ impl Language for Swift {
     fn write_vec_field(
         &mut self,
         w: &mut dyn Write,
-        ident: &str,
+        ident: &Id,
         optional: bool,
         ty: &str,
     ) -> std::io::Result<()> {
         writeln!(
             w,
             "\tpublic let {}: [{}]{}",
-            ident,
+            ident.original,
             swift_type(ty),
             option_symbol(optional)
         )?;

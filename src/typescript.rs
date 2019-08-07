@@ -1,5 +1,6 @@
 use std::io::Write;
 
+use crate::language::Id;
 use crate::language::Language;
 
 pub struct TypeScript {}
@@ -36,22 +37,22 @@ impl Language for TypeScript {
         Ok(())
     }
 
-    fn write_begin_struct(&mut self, w: &mut dyn Write, name: &str) -> std::io::Result<()> {
-        writeln!(w, "export interface {} {{", name)?;
+    fn write_begin_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
+        writeln!(w, "export interface {} {{", id.original)?;
         Ok(())
     }
 
-    fn write_end_struct(&mut self, w: &mut dyn Write, _name: &str) -> std::io::Result<()> {
+    fn write_end_struct(&mut self, w: &mut dyn Write, _id: &Id) -> std::io::Result<()> {
         writeln!(w, "}}\n")?;
         Ok(())
     }
 
-    fn write_begin_enum(&mut self, w: &mut dyn Write, name: &str) -> std::io::Result<()> {
-        writeln!(w, "export enum {} {{", name)?;
+    fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
+        writeln!(w, "export enum {} {{", id.original)?;
         Ok(())
     }
 
-    fn write_end_enum(&mut self, w: &mut dyn Write, _name: &str) -> std::io::Result<()> {
+    fn write_end_enum(&mut self, w: &mut dyn Write, _id: &Id) -> std::io::Result<()> {
         writeln!(w, "}}")?;
         Ok(())
     }
@@ -59,14 +60,14 @@ impl Language for TypeScript {
     fn write_field(
         &mut self,
         w: &mut dyn Write,
-        ident: &str,
+        ident: &Id,
         optional: bool,
         ty: &str,
     ) -> std::io::Result<()> {
         writeln!(
             w,
             "\t{}{}: {};",
-            ident,
+            ident.renamed,
             option_symbol(optional),
             typescript_type(ty)
         )?;
@@ -76,14 +77,14 @@ impl Language for TypeScript {
     fn write_vec_field(
         &mut self,
         w: &mut dyn Write,
-        ident: &str,
+        ident: &Id,
         optional: bool,
         ty: &str,
     ) -> std::io::Result<()> {
         writeln!(
             w,
             "\t{}{}: {}[];",
-            ident,
+            ident.renamed,
             option_symbol(optional),
             typescript_type(ty)
         )?;
