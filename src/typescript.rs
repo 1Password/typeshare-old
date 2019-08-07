@@ -53,7 +53,7 @@ impl Language for TypeScript {
     }
 
     fn write_end_enum(&mut self, w: &mut dyn Write, _id: &Id) -> std::io::Result<()> {
-        writeln!(w, "}}")?;
+        writeln!(w, "}}\n")?;
         Ok(())
     }
 
