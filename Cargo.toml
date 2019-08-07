@@ -1,6 +1,6 @@
 [package]
 name = "typeshare"
-version = "0.0.4"
+version = "0.0.5"
 authors = [
     "Andrew Beyer <beyer@1password.com>",
     "Roustem <roustem@1password.com>"
