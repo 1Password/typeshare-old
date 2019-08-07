@@ -44,17 +44,22 @@ impl Language for Swift {
         Ok(())
     }
 
-    fn write_comment(&mut self, w: &mut dyn Write, indent: usize, comment: &str) -> std::io::Result<()>  {
+    fn write_comment(
+        &mut self,
+        w: &mut dyn Write,
+        indent: usize,
+        comment: &str,
+    ) -> std::io::Result<()> {
         writeln!(w, "{}/// {}", "\t".repeat(indent), comment)?;
         Ok(())
     }
 
-    fn write_begin_struct(&mut self, w: &mut dyn Write, name: &str) -> std::io::Result<()>  {
+    fn write_begin_struct(&mut self, w: &mut dyn Write, name: &str) -> std::io::Result<()> {
         writeln!(w, "public struct {}: Codable {{", name)?;
         Ok(())
     }
 
-    fn write_end_struct(&mut self, w: &mut dyn Write, _name: &str) -> std::io::Result<()>  {
+    fn write_end_struct(&mut self, w: &mut dyn Write, _name: &str) -> std::io::Result<()> {
         writeln!(w, "\n\tpublic init({}) {{", self.init_params.join(", "))?;
         for f in self.init_fields.iter() {
             writeln!(w, "\t\tself.{} = {}", f, f)?;
@@ -68,31 +73,57 @@ impl Language for Swift {
         Ok(())
     }
 
-    fn write_begin_enum(&mut self, w: &mut dyn Write, name: &str) -> std::io::Result<()>  {
+    fn write_begin_enum(&mut self, w: &mut dyn Write, name: &str) -> std::io::Result<()> {
         writeln!(w, "export enum {} {{", name)?;
         Ok(())
     }
 
-    fn write_end_enum(&mut self, w: &mut dyn Write, _name: &str) -> std::io::Result<()>  {
+    fn write_end_enum(&mut self, w: &mut dyn Write, _name: &str) -> std::io::Result<()> {
         writeln!(w, "}}")?;
         Ok(())
     }
 
-    fn write_field(&mut self, w: &mut dyn Write, ident: &str, optional: bool, ty: &str) ->  std::io::Result<()>  {
-        writeln!(w, "\tpublic let {}: {}{}", ident, swift_type(ty), option_symbol(optional))?;
+    fn write_field(
+        &mut self,
+        w: &mut dyn Write,
+        ident: &str,
+        optional: bool,
+        ty: &str,
+    ) -> std::io::Result<()> {
+        writeln!(
+            w,
+            "\tpublic let {}: {}{}",
+            ident,
+            swift_type(ty),
+            option_symbol(optional)
+        )?;
         self.init_fields.push(ident.to_string());
-        self.init_params.push(format!("{}: {}", ident, swift_type(ty)));
+        self.init_params
+            .push(format!("{}: {}", ident, swift_type(ty)));
         Ok(())
     }
 
-    fn write_vec_field(&mut self, w: &mut dyn Write, ident: &str, optional: bool, ty: &str) ->  std::io::Result<()>  {
-        writeln!(w, "\tpublic let {}: [{}]{}", ident, swift_type(ty), option_symbol(optional))?;
+    fn write_vec_field(
+        &mut self,
+        w: &mut dyn Write,
+        ident: &str,
+        optional: bool,
+        ty: &str,
+    ) -> std::io::Result<()> {
+        writeln!(
+            w,
+            "\tpublic let {}: [{}]{}",
+            ident,
+            swift_type(ty),
+            option_symbol(optional)
+        )?;
         self.init_fields.push(ident.to_string());
-        self.init_params.push(format!("{}: {}", ident, swift_type(ty)));
+        self.init_params
+            .push(format!("{}: {}", ident, swift_type(ty)));
         Ok(())
     }
 }
- 
+
 fn option_symbol(optional: bool) -> &'static str {
     match optional {
         true => "?",
