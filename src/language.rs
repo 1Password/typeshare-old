@@ -1,14 +1,14 @@
 use std::{error::Error, fs, io::Write};
 use syn;
 
-const COMMENT_PREFIX: &'static str = "= \" ";
-const COMMENT_SUFFIX: &'static str = "\"";
+const COMMENT_PREFIX: &str = "= \" ";
+const COMMENT_SUFFIX: &str = "\"";
 
-const OPTION_PREFIX: &'static str = "Option < ";
-const OPTION_SUFFIX: &'static str = " >";
+const OPTION_PREFIX: &str = "Option < ";
+const OPTION_SUFFIX: &str = " >";
 
-const VEC_PREFIX: &'static str = "Vec < ";
-const VEC_SUFFIX: &'static str = " >";
+const VEC_PREFIX: &str = "Vec < ";
+const VEC_SUFFIX: &str = " >";
 
 #[derive(Clone)]
 pub struct Id {
@@ -101,8 +101,8 @@ pub trait Language {
 
     fn process_algebraic_enum(
         &mut self,
-        w: &mut dyn Write,
-        e: &syn::ItemEnum,
+        _w: &mut dyn Write,
+        _e: &syn::ItemEnum,
     ) -> std::io::Result<()> {
         Ok(())
     }

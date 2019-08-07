@@ -126,8 +126,9 @@ impl Language for Swift {
 }
 
 fn option_symbol(optional: bool) -> &'static str {
-    match optional {
-        true => "?",
-        false => "",
+    if optional {
+        "?"
+    } else {
+        ""
     }
 }

@@ -5,7 +5,7 @@ mod swift;
 mod typescript;
 use language::Language;
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() {
     let matches = App::new("typeshare")

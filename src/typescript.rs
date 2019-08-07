@@ -106,16 +106,18 @@ impl Language for TypeScript {
     }
 }
 
-fn bool_literal(b: bool) -> String {
-    match b {
-        false => "false".to_string(),
-        true => "true".to_string(),
+fn bool_literal(b: bool) -> &'static str {
+    if b {
+        "true"
+    } else {
+        "false"
     }
 }
 
 fn option_symbol(optional: bool) -> &'static str {
-    match optional {
-        true => "?",
-        false => "",
+    if optional {
+        "?"
+    } else {
+        ""
     }
 }
