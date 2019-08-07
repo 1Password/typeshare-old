@@ -6,7 +6,6 @@ authors = [
     "Roustem <roustem@1password.com>"
 ]
 edition = "2018"
-description = "Generate code in different languages from Rust type definitions for FFI interop"
 license = "MIT"
 license-file = "LICENSE"
 repository = "https://github.com/1Password/typeshare"
