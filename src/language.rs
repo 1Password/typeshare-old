@@ -279,15 +279,33 @@ fn get_ident(ident: Option<&proc_macro2::Ident>, attrs: &[syn::Attribute]) -> Id
 }
 
 fn serde_rename(attrs: &[syn::Attribute]) -> Option<String> {
-    const RENAME_PREFIX: &str = r##"( rename = ""##;
-    const RENAME_SUFFIX: &str = r##"" )"##;
+    const RENAME_PREFIX: &str = r##"rename = ""##;
+    const RENAME_SUFFIX: &str = r##"""##;
 
     for a in attrs.iter() {
-        let s = a.tts.to_string();
-        if s.starts_with(RENAME_PREFIX) {
-            let result = remove_prefix_suffix(&s, RENAME_PREFIX, RENAME_SUFFIX);
-            return Some(result.to_string());
+        let attr_as_string = a.tts.to_string();
+        let values = parse_attr(&attr_as_string);
+        if values.is_none() {
+            return None;
         }
+
+        for v in values.unwrap() {
+            if v.starts_with(RENAME_PREFIX) && v.ends_with(RENAME_SUFFIX) {
+                return Some(remove_prefix_suffix(&v, RENAME_PREFIX, RENAME_SUFFIX).to_string());
+            }
+        }
+    }
+
+    None
+}
+
+fn parse_attr<'x>(attr: &'x str) -> Option<Vec<&'x str>> {
+    const ATTR_PREFIX: &str = "( ";
+    const ATTR_SUFFIX: &str = " )";
+
+    if attr.starts_with(ATTR_PREFIX) && attr.ends_with(ATTR_SUFFIX) {
+        let attr = remove_prefix_suffix(attr, ATTR_PREFIX, ATTR_SUFFIX);
+        return Some(attr.split(" , ").collect());
     }
 
     None
