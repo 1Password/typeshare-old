@@ -45,12 +45,7 @@ impl Language for Swift {
         Ok(())
     }
 
-    fn write_comment(
-        &mut self,
-        w: &mut dyn Write,
-        indent: usize,
-        comment: &str,
-    ) -> std::io::Result<()> {
+    fn write_comment(&mut self, w: &mut dyn Write, indent: usize, comment: &str) -> std::io::Result<()> {
         writeln!(w, "{}/// {}", "\t".repeat(indent), comment)?;
         Ok(())
     }
@@ -84,44 +79,45 @@ impl Language for Swift {
         Ok(())
     }
 
-    fn write_field(
-        &mut self,
-        w: &mut dyn Write,
-        ident: &Id,
-        optional: bool,
-        ty: &str,
-    ) -> std::io::Result<()> {
-        writeln!(
-            w,
-            "\tpublic let {}: {}{}",
-            ident.original,
-            swift_type(ty),
-            option_symbol(optional)
-        )?;
+    fn write_field(&mut self, w: &mut dyn Write, ident: &Id, optional: bool, ty: &str) -> std::io::Result<()> {
+        writeln!(w, "\tpublic let {}: {}{}", ident.original, swift_type(ty), option_symbol(optional))?;
         self.init_fields.push(ident.to_string());
-        self.init_params
-            .push(format!("{}: {}", ident, swift_type(ty)));
+        self.init_params.push(format!("{}: {}", ident, swift_type(ty)));
         Ok(())
     }
 
-    fn write_vec_field(
-        &mut self,
-        w: &mut dyn Write,
-        ident: &Id,
-        optional: bool,
-        ty: &str,
-    ) -> std::io::Result<()> {
-        writeln!(
-            w,
-            "\tpublic let {}: [{}]{}",
-            ident.original,
-            swift_type(ty),
-            option_symbol(optional)
-        )?;
+    fn write_vec_field(&mut self, w: &mut dyn Write, ident: &Id, optional: bool, ty: &str) -> std::io::Result<()> {
+        writeln!(w, "\tpublic let {}: [{}]{}", ident.original, swift_type(ty), option_symbol(optional))?;
         self.init_fields.push(ident.to_string());
-        self.init_params
-            .push(format!("{}: {}", ident, swift_type(ty)));
+        self.init_params.push(format!("{}: {}", ident, swift_type(ty)));
         Ok(())
+    }
+
+    fn write_const_enum_variant(&mut self, w: &mut dyn Write, _ident: &Id, _value: &str) -> std::io::Result<()> {
+        writeln!(w, "\tENUM VARIANT HERE")?;
+        Ok(())
+    }
+
+    fn lit_value(&self, l: &syn::ExprLit) -> String {
+        match &l.lit {
+            syn::Lit::Str(s) => format!(r##""{}""##, s.value()),
+            // syn::Lit::ByteStr(s) => format!("[{}]", &s.value().as_slice()),
+            syn::Lit::Byte(s) => format!("{}", s.value()),
+            syn::Lit::Char(s) => format!("{}", s.value()),
+            syn::Lit::Int(s) => format!("{}", s.value()),
+            syn::Lit::Float(s) => format!("{}", s.value()),
+            syn::Lit::Bool(s) => format!(r##""{}""##, bool_literal(s.value)),
+            // syn::Lit::Verbatim(s) => format!(r##""{}""##, s.to_string()),
+            _ => "nope???".to_string(),
+        }
+    }
+}
+
+fn bool_literal(b: bool) -> &'static str {
+    if b {
+        "true"
+    } else {
+        "false"
     }
 }
 

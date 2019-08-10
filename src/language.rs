@@ -27,38 +27,67 @@ impl std::fmt::Display for Id {
 }
 
 pub trait Language {
-    fn process(&mut self, w: &mut dyn Write, filename: &str) -> Result<(), Box<dyn Error>> {
+    fn begin(&mut self, _w: &mut dyn Write) -> std::io::Result<()> {
+        Ok(())
+    }
+
+    fn end(&mut self, _w: &mut dyn Write) -> std::io::Result<()> {
+        Ok(())
+    }
+
+    fn write_comment(&mut self, w: &mut dyn Write, _indent: usize, comment: &str) -> std::io::Result<()>;
+    fn write_begin_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()>;
+    fn write_end_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()>;
+    fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()>;
+    fn write_end_enum(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()>;
+    fn write_field(&mut self, w: &mut dyn Write, ident: &Id, _optional: bool, _ty: &str) -> std::io::Result<()>;
+    fn write_vec_field(&mut self, w: &mut dyn Write, ident: &Id, _optional: bool, _ty: &str) -> std::io::Result<()>;
+    fn write_const_enum_variant(&mut self, w: &mut dyn Write, ident: &Id, value: &str) -> std::io::Result<()>;
+    fn lit_value(&self, l: &syn::ExprLit) -> String;
+}
+
+pub struct Generator<'l, 'w> {
+    language: &'l mut dyn Language,
+    pub writer: &'w mut dyn Write,
+}
+
+impl<'l, 'w> Generator<'l, 'w> {
+    pub fn new(language: &'l mut dyn Language, writer: &'w mut dyn Write) -> Self {
+        Self { language, writer }
+    }
+
+    pub fn process_file(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
         let source = fs::read_to_string(filename)?;
         let source = syn::parse_file(&source)?;
 
-        self.begin(w)?;
+        self.language.begin(self.writer)?;
 
         for item in source.items.iter() {
             match item {
-                syn::Item::Struct(s) => self.process_struct(w, &s)?,
-                syn::Item::Enum(e) => self.process_enum(w, &e)?,
+                syn::Item::Struct(s) => self.process_struct(&s)?,
+                syn::Item::Enum(e) => self.process_enum(&e)?,
                 syn::Item::Fn(_) => {}
                 _ => {}
             }
         }
 
-        self.end(w)?;
+        self.language.end(self.writer)?;
         Ok(())
     }
 
-    fn process_struct(&mut self, w: &mut dyn Write, s: &syn::ItemStruct) -> std::io::Result<()> {
-        self.process_comment_attrs(w, 0, &s.attrs)?;
+    fn process_struct(&mut self, s: &syn::ItemStruct) -> std::io::Result<()> {
+        self.process_comment_attrs(0, &s.attrs)?;
         let ident = get_ident(Some(&s.ident), &s.attrs);
-        self.write_begin_struct(w, &ident)?;
+        self.language.write_begin_struct(self.writer, &ident)?;
         for f in s.fields.iter() {
-            self.process_field(w, &f)?;
+            self.process_field(&f)?;
         }
-        self.write_end_struct(w, &ident)?;
+        self.language.write_end_struct(self.writer, &ident)?;
         Ok(())
     }
 
-    fn process_field(&mut self, w: &mut dyn Write, f: &syn::Field) -> std::io::Result<()> {
-        self.process_comment_attrs(w, 1, &f.attrs)?;
+    fn process_field(&mut self, f: &syn::Field) -> std::io::Result<()> {
+        self.process_comment_attrs(1, &f.attrs)?;
 
         let mut ty: &str = &type_as_string(&f.ty);
         let optional = ty.starts_with(OPTION_PREFIX);
@@ -70,49 +99,41 @@ pub trait Language {
 
         if ty.starts_with(VEC_PREFIX) {
             let ty = &remove_prefix_suffix(&ty, VEC_PREFIX, VEC_SUFFIX);
-            self.write_vec_field(w, &ident, optional, ty)?;
+            self.language.write_vec_field(self.writer, &ident, optional, ty)?;
         } else {
-            self.write_field(w, &ident, optional, ty)?;
+            self.language.write_field(self.writer, &ident, optional, ty)?;
         }
 
         Ok(())
     }
 
-    fn process_enum(&mut self, w: &mut dyn Write, e: &syn::ItemEnum) -> std::io::Result<()> {
-        self.process_comment_attrs(w, 0, &e.attrs)?;
+    fn process_enum(&mut self, e: &syn::ItemEnum) -> std::io::Result<()> {
+        self.process_comment_attrs(0, &e.attrs)?;
         if is_const_enum(e) {
-            self.process_const_enum(w, e)?;
+            self.process_const_enum(e)?;
         } else {
-            self.process_algebraic_enum(w, e)?;
+            self.process_algebraic_enum(e)?;
         }
 
         Ok(())
     }
 
-    fn process_const_enum(&mut self, w: &mut dyn Write, e: &syn::ItemEnum) -> std::io::Result<()> {
+    fn process_const_enum(&mut self, e: &syn::ItemEnum) -> std::io::Result<()> {
         let ident = get_ident(Some(&e.ident), &e.attrs);
-        self.write_begin_enum(w, &ident)?;
+        self.language.write_begin_enum(self.writer, &ident)?;
         for v in e.variants.iter() {
-            self.process_const_enum_variant(w, &v)?;
+            self.process_const_enum_variant(&v)?;
         }
-        self.write_end_enum(w, &ident)?;
+        self.language.write_end_enum(self.writer, &ident)?;
         Ok(())
     }
 
-    fn process_algebraic_enum(
-        &mut self,
-        _w: &mut dyn Write,
-        _e: &syn::ItemEnum,
-    ) -> std::io::Result<()> {
+    fn process_algebraic_enum(&mut self, _e: &syn::ItemEnum) -> std::io::Result<()> {
         Ok(())
     }
 
-    fn process_const_enum_variant(
-        &mut self,
-        w: &mut dyn Write,
-        v: &syn::Variant,
-    ) -> std::io::Result<()> {
-        self.process_comment_attrs(w, 1, &v.attrs)?;
+    fn process_const_enum_variant(&mut self, v: &syn::Variant) -> std::io::Result<()> {
+        self.process_comment_attrs(1, &v.attrs)?;
         let value = {
             if let Some(d) = &v.discriminant {
                 // if d.0 != syn::Token![=] {
@@ -120,7 +141,7 @@ pub trait Language {
                 // }
 
                 match &d.1 {
-                    syn::Expr::Lit(l) => self.lit_value(l),
+                    syn::Expr::Lit(l) => self.language.lit_value(l),
                     _ => {
                         panic!("unexpected expr");
                     }
@@ -130,111 +151,17 @@ pub trait Language {
             }
         };
 
-        self.write_const_enum_variant(w, &get_ident(Some(&v.ident), &v.attrs), &value)?;
+        self.language.write_const_enum_variant(self.writer, &get_ident(Some(&v.ident), &v.attrs), &value)?;
         Ok(())
-    }
-
-    //------
-
-    fn begin(&mut self, _w: &mut dyn Write) -> std::io::Result<()> {
-        Ok(())
-    }
-
-    fn end(&mut self, _w: &mut dyn Write) -> std::io::Result<()> {
-        Ok(())
-    }
-
-    fn write_comment(
-        &mut self,
-        w: &mut dyn Write,
-        _indent: usize,
-        comment: &str,
-    ) -> std::io::Result<()> {
-        writeln!(w, "COMMENT: {}", comment)?;
-        Ok(())
-    }
-
-    fn write_begin_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
-        writeln!(w, "BEGIN STRUCT: {}", id)?;
-        Ok(())
-    }
-
-    fn write_end_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
-        writeln!(w, "END STRUCT: {}", id)?;
-        Ok(())
-    }
-
-    fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
-        writeln!(w, "BEGIN ENUM: {}", id)?;
-        Ok(())
-    }
-
-    fn write_end_enum(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
-        writeln!(w, "END ENUM: {}", id)?;
-        Ok(())
-    }
-
-    fn write_field(
-        &mut self,
-        w: &mut dyn Write,
-        ident: &Id,
-        _optional: bool,
-        _ty: &str,
-    ) -> std::io::Result<()> {
-        writeln!(w, "FIELD: {}", ident.original)?;
-        Ok(())
-    }
-
-    fn write_vec_field(
-        &mut self,
-        w: &mut dyn Write,
-        ident: &Id,
-        _optional: bool,
-        _ty: &str,
-    ) -> std::io::Result<()> {
-        writeln!(w, "VEC FIELD: {}", ident.original)?;
-        Ok(())
-    }
-
-    fn write_const_enum_variant(
-        &mut self,
-        w: &mut dyn Write,
-        ident: &Id,
-        value: &str,
-    ) -> std::io::Result<()> {
-        let mut printed_value = value.to_string();
-        if printed_value == "" {
-            printed_value = format!(r##""{}""##, &ident.renamed);
-        }
-
-        writeln!(w, "\t{} = {},", ident.original, &printed_value)?;
-
-        Ok(())
-    }
-
-    fn lit_value(&self, l: &syn::ExprLit) -> String {
-        match &l.lit {
-            syn::Lit::Str(s) => format!(r##""{}""##, s.value()),
-            _ => "nope???".to_string(),
-        }
     }
 
     //----
 
-    fn process_comment_attrs(
-        &mut self,
-        w: &mut dyn Write,
-        indent: usize,
-        attrs: &[syn::Attribute],
-    ) -> std::io::Result<()> {
+    fn process_comment_attrs(&mut self, indent: usize, attrs: &[syn::Attribute]) -> std::io::Result<()> {
         for a in attrs.iter() {
             let s = a.tts.to_string();
             if s.starts_with(COMMENT_PREFIX) {
-                self.write_comment(
-                    w,
-                    indent,
-                    remove_prefix_suffix(&s, COMMENT_PREFIX, COMMENT_SUFFIX),
-                )?;
+                self.language.write_comment(self.writer, indent, remove_prefix_suffix(&s, COMMENT_PREFIX, COMMENT_SUFFIX))?;
             }
         }
 
@@ -267,10 +194,7 @@ fn type_as_string(ty: &syn::Type) -> String {
 fn get_ident(ident: Option<&proc_macro2::Ident>, attrs: &[syn::Attribute]) -> Id {
     let original = ident.map_or("???".to_string(), |id| id.to_string().replace("r#", ""));
     match serde_rename(attrs) {
-        Some(s) => Id {
-            original,
-            renamed: s,
-        },
+        Some(s) => Id { original, renamed: s },
         None => Id {
             original: original.clone(),
             renamed: original,

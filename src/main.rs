@@ -3,7 +3,7 @@ use clap::{App, Arg};
 mod language;
 mod swift;
 mod typescript;
-use language::Language;
+use language::{Generator, Language};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -18,12 +18,7 @@ fn main() {
                 .takes_value(true)
                 .required(false),
         )
-        .arg(
-            Arg::with_name("input.rs")
-                .help("Sets the input file to use")
-                .required(true)
-                .index(1),
-        )
+        .arg(Arg::with_name("input.rs").help("Sets the input file to use").required(true).index(1))
         .get_matches();
 
     let filename = matches.value_of("input.rs").unwrap();
@@ -33,8 +28,9 @@ fn main() {
         Some("java") => Box::new(typescript::TypeScript {}),
         Some("swift") => Box::new(swift::Swift::new()),
         Some("ts") => Box::new(typescript::TypeScript {}),
-        _ => Box::new(swift::Swift::new()),
+        _ => Box::new(typescript::TypeScript {}),
     };
 
-    lang.process(&mut out, filename).expect("failed to process");
+    let mut generator = Generator::new(lang.as_mut(), &mut out);
+    generator.process_file(filename).expect("failed to process");
 }
