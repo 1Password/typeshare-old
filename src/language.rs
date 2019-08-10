@@ -284,12 +284,9 @@ fn serde_rename(attrs: &[syn::Attribute]) -> Option<String> {
 
     for a in attrs.iter() {
         let attr_as_string = a.tts.to_string();
-        let values = parse_attr(&attr_as_string);
-        if values.is_none() {
-            return None;
-        }
+        let values = parse_attr(&attr_as_string)?;
 
-        for v in values.unwrap() {
+        for v in values {
             if v.starts_with(RENAME_PREFIX) && v.ends_with(RENAME_SUFFIX) {
                 return Some(remove_prefix_suffix(&v, RENAME_PREFIX, RENAME_SUFFIX).to_string());
             }
