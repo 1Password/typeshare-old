@@ -70,7 +70,7 @@ impl Language for Swift {
     }
 
     fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
-        writeln!(w, "export enum {} {{", id.original)?;
+        writeln!(w, "public enum {}: String, Codable {{", id.original)?;
         Ok(())
     }
 
@@ -81,20 +81,26 @@ impl Language for Swift {
 
     fn write_field(&mut self, w: &mut dyn Write, ident: &Id, optional: bool, ty: &str) -> std::io::Result<()> {
         writeln!(w, "\tpublic let {}: {}{}", ident.original, swift_type(ty), option_symbol(optional))?;
-        self.init_fields.push(ident.to_string());
-        self.init_params.push(format!("{}: {}", ident, swift_type(ty)));
+        self.init_fields.push(ident.original.clone());
+        self.init_params.push(format!("{}: {}{}", ident.original, swift_type(ty), option_symbol(optional)));
         Ok(())
     }
 
     fn write_vec_field(&mut self, w: &mut dyn Write, ident: &Id, optional: bool, ty: &str) -> std::io::Result<()> {
         writeln!(w, "\tpublic let {}: [{}]{}", ident.original, swift_type(ty), option_symbol(optional))?;
-        self.init_fields.push(ident.to_string());
-        self.init_params.push(format!("{}: {}", ident, swift_type(ty)));
+        self.init_fields.push(ident.original.clone());
+        self.init_params.push(format!("{}: [{}]{}", ident.original, swift_type(ty), option_symbol(optional)));
         Ok(())
     }
 
-    fn write_const_enum_variant(&mut self, w: &mut dyn Write, _ident: &Id, _value: &str) -> std::io::Result<()> {
-        writeln!(w, "\tENUM VARIANT HERE")?;
+    fn write_const_enum_variant(&mut self, w: &mut dyn Write, ident: &Id, value: &str) -> std::io::Result<()> {
+        let mut printed_value = value.to_string();
+        if printed_value == "" {
+            printed_value = format!(r##""{}""##, &ident.renamed);
+        }
+
+        writeln!(w, "\tcase {} = {}", ident.original, &printed_value)?;
+
         Ok(())
     }
 
