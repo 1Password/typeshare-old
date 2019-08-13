@@ -58,6 +58,10 @@ impl<'l, 'w> Generator<'l, 'w> {
 
     pub fn process_file(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
         let source = fs::read_to_string(filename)?;
+        self.process_source(source)
+    }
+
+    pub fn process_source(&mut self, source: String) -> Result<(), Box<dyn Error>> {
         let source = syn::parse_file(&source)?;
 
         self.language.begin(self.writer)?;

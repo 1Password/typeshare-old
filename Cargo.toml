@@ -13,6 +13,16 @@ readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "typeshare"
+path = "src/lib.rs"
+docs = false
+
+[[bin]]
+name = "typeshare"
+path = "src/main.rs"
+docs = true
+
 [dependencies]
 clap = "2.33.0"
 proc-macro2 = "0.4.30"
