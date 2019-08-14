@@ -41,6 +41,14 @@ public struct Person: Codable {
 	}
 }
 
+
+public extension Person {
+	convenience init(data: Data) throws {
+		let decoded = try JSONDecoder().decode(Person.self, from: data)
+		self.init(name: decoded.name, age: decoded.age, info: decoded.info, emails: decoded.emails)
+	}
+}
+
 ";
 
     assert_eq!(expected, &result);
@@ -86,6 +94,14 @@ public struct Person: Codable {
 		self.age = age
 		self.extraSpecialFieldOne = extraSpecialFieldOne
 		self.extraSpecialFieldTwo = extraSpecialFieldTwo
+	}
+}
+
+
+public extension Person {
+	convenience init(data: Data) throws {
+		let decoded = try JSONDecoder().decode(Person.self, from: data)
+		self.init(name: decoded.name, age: decoded.age, extraSpecialFieldOne: decoded.extraSpecialFieldOne, extraSpecialFieldTwo: decoded.extraSpecialFieldTwo)
 	}
 }
 

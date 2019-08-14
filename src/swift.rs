@@ -69,13 +69,15 @@ impl Language for Swift {
         Ok(())
     }
 
-    fn write_end_struct(&mut self, w: &mut dyn Write, _id: &Id) -> std::io::Result<()> {
+    fn write_end_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
         writeln!(w, "\n\tpublic init({}) {{", self.init_params.join(", "))?;
         for f in self.init_fields.iter() {
             writeln!(w, "\t\tself.{} = {}", f, f)?;
         }
         writeln!(w, "\t}}")?;
         writeln!(w, "}}\n")?;
+
+        write_struct_convenience_methods(w, id, &self.init_fields)?;
 
         self.init_fields.truncate(0);
         self.init_params.truncate(0);
@@ -147,4 +149,27 @@ fn option_symbol(optional: bool) -> &'static str {
     } else {
         ""
     }
+}
+
+fn write_struct_convenience_methods(w: &mut dyn Write, id: &Id, init_fields: &Vec<String>) -> std::io::Result<()> {
+    let data_init_params = init_fields
+        .iter()
+        .map(|item| format!("{param}: decoded.{param}", param = item))
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    writeln!(
+        w,
+        "
+public extension {struct} {{
+\tconvenience init(data: Data) throws {{
+\t\tlet decoded = try JSONDecoder().decode({struct}.self, from: data)
+\t\tself.init({params})
+\t}}
+}}
+",
+        struct = id.original, params = data_init_params
+    )?;
+
+    Ok(())
 }
