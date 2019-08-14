@@ -43,7 +43,7 @@ public struct Person: Codable {
 
 
 public extension Person {
-	convenience init(data: Data) throws {
+	init(data: Data) throws {
 		let decoded = try JSONDecoder().decode(Person.self, from: data)
 		self.init(name: decoded.name, age: decoded.age, info: decoded.info, emails: decoded.emails)
 	}
@@ -99,7 +99,7 @@ public struct Person: Codable {
 
 
 public extension Person {
-	convenience init(data: Data) throws {
+	init(data: Data) throws {
 		let decoded = try JSONDecoder().decode(Person.self, from: data)
 		self.init(name: decoded.name, age: decoded.age, extraSpecialFieldOne: decoded.extraSpecialFieldOne, extraSpecialFieldTwo: decoded.extraSpecialFieldTwo)
 	}
@@ -143,6 +143,43 @@ public enum Colors: Int, Codable {
 }
 
 ";
+
+    assert_eq!(expected, &result);
+    println!("{}", result);
+}
+
+#[test]
+fn can_generate_bare_string_enum() {
+    let mut out: Vec<u8> = Vec::new();
+    let mut lang = swift::Swift::new();
+    let mut g = Generator::new(&mut lang, &mut out);
+
+    let source = r##"
+/// This is a comment.
+pub enum Colors {
+	Red,
+	Blue,
+	Green,
+}
+   
+"##;
+    assert!(g.process_source(source.to_string()).is_ok(), "must be able to process the source");
+    let result = String::from_utf8(out).unwrap();
+
+    let expected = r#"/// 
+/// Generated
+/// 
+
+import Foundation
+
+/// This is a comment.
+public enum Colors: String, Codable {
+	case Red = "Red"
+	case Blue = "Blue"
+	case Green = "Green"
+}
+
+"#;
 
     assert_eq!(expected, &result);
     println!("{}", result);

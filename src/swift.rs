@@ -45,7 +45,7 @@ fn swift_lit_type(lit: Option<&syn::Lit>) -> &'static str {
         Some(syn::Lit::Float(_)) => "Float",
         Some(syn::Lit::Bool(_)) => "Bool",
         Some(syn::Lit::Verbatim(_)) => " ERROR ",
-        None => "",
+        None => "String", // Should be used when we have a bare enum
     }
 }
 
@@ -162,7 +162,7 @@ fn write_struct_convenience_methods(w: &mut dyn Write, id: &Id, init_fields: &Ve
         w,
         "
 public extension {struct} {{
-\tconvenience init(data: Data) throws {{
+\tinit(data: Data) throws {{
 \t\tlet decoded = try JSONDecoder().decode({struct}.self, from: data)
 \t\tself.init({params})
 \t}}
