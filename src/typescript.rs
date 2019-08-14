@@ -42,7 +42,7 @@ impl Language for TypeScript {
         Ok(())
     }
 
-    fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
+    fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id, _enum_type: Option<&syn::Lit>) -> std::io::Result<()> {
         writeln!(w, "export enum {} {{", id.original)?;
         Ok(())
     }

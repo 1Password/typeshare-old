@@ -35,6 +35,20 @@ fn swift_type(s: &str) -> &str {
     }
 }
 
+fn swift_lit_type(lit: Option<&syn::Lit>) -> &'static str {
+    match lit {
+        Some(syn::Lit::Int(_)) => "Int",
+        Some(syn::Lit::Str(_)) => "String",
+        Some(syn::Lit::ByteStr(_)) => "[UInt8]",
+        Some(syn::Lit::Byte(_)) => "UInt8",
+        Some(syn::Lit::Char(_)) => "Int8",
+        Some(syn::Lit::Float(_)) => "Float",
+        Some(syn::Lit::Bool(_)) => "Bool",
+        Some(syn::Lit::Verbatim(_)) => " ERROR ",
+        None => "String", // Should be used when we have a bare enum
+    }
+}
+
 impl Language for Swift {
     fn begin(&mut self, w: &mut dyn Write) -> std::io::Result<()> {
         self.write_comment(w, 0, "")?;
@@ -55,7 +69,7 @@ impl Language for Swift {
         Ok(())
     }
 
-    fn write_end_struct(&mut self, w: &mut dyn Write, _id: &Id) -> std::io::Result<()> {
+    fn write_end_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
         writeln!(w, "\n\tpublic init({}) {{", self.init_params.join(", "))?;
         for f in self.init_fields.iter() {
             writeln!(w, "\t\tself.{} = {}", f, f)?;
@@ -63,33 +77,35 @@ impl Language for Swift {
         writeln!(w, "\t}}")?;
         writeln!(w, "}}\n")?;
 
+        write_struct_convenience_methods(w, id, &self.init_fields)?;
+
         self.init_fields.truncate(0);
         self.init_params.truncate(0);
 
         Ok(())
     }
 
-    fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
-        writeln!(w, "public enum {}: String, Codable {{", id.original)?;
+    fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id, enum_type: Option<&syn::Lit>) -> std::io::Result<()> {
+        writeln!(w, "public enum {}: {}, Codable {{", id.original, swift_lit_type(enum_type))?;
         Ok(())
     }
 
     fn write_end_enum(&mut self, w: &mut dyn Write, _id: &Id) -> std::io::Result<()> {
-        writeln!(w, "}}")?;
+        writeln!(w, "}}\n")?;
         Ok(())
     }
 
     fn write_field(&mut self, w: &mut dyn Write, ident: &Id, optional: bool, ty: &str) -> std::io::Result<()> {
-        writeln!(w, "\tpublic let {}: {}{}", ident.original, swift_type(ty), option_symbol(optional))?;
-        self.init_fields.push(ident.original.clone());
-        self.init_params.push(format!("{}: {}{}", ident.original, swift_type(ty), option_symbol(optional)));
+        writeln!(w, "\tpublic let {}: {}{}", ident.renamed, swift_type(ty), option_symbol(optional))?;
+        self.init_fields.push(ident.renamed.clone());
+        self.init_params.push(format!("{}: {}{}", ident.renamed, swift_type(ty), option_symbol(optional)));
         Ok(())
     }
 
     fn write_vec_field(&mut self, w: &mut dyn Write, ident: &Id, optional: bool, ty: &str) -> std::io::Result<()> {
-        writeln!(w, "\tpublic let {}: [{}]{}", ident.original, swift_type(ty), option_symbol(optional))?;
-        self.init_fields.push(ident.original.clone());
-        self.init_params.push(format!("{}: [{}]{}", ident.original, swift_type(ty), option_symbol(optional)));
+        writeln!(w, "\tpublic let {}: [{}]{}", ident.renamed, swift_type(ty), option_symbol(optional))?;
+        self.init_fields.push(ident.renamed.clone());
+        self.init_params.push(format!("{}: [{}]{}", ident.renamed, swift_type(ty), option_symbol(optional)));
         Ok(())
     }
 
@@ -99,7 +115,7 @@ impl Language for Swift {
             printed_value = format!(r##""{}""##, &ident.renamed);
         }
 
-        writeln!(w, "\tcase {} = {}", ident.original, &printed_value)?;
+        writeln!(w, "\tcase {} = {}", ident.renamed, &printed_value)?;
 
         Ok(())
     }
@@ -133,4 +149,27 @@ fn option_symbol(optional: bool) -> &'static str {
     } else {
         ""
     }
+}
+
+fn write_struct_convenience_methods(w: &mut dyn Write, id: &Id, init_fields: &Vec<String>) -> std::io::Result<()> {
+    let data_init_params = init_fields
+        .iter()
+        .map(|item| format!("{param}: decoded.{param}", param = item))
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    writeln!(
+        w,
+        "
+public extension {struct} {{
+\tinit(data: Data) throws {{
+\t\tlet decoded = try JSONDecoder().decode({struct}.self, from: data)
+\t\tself.init({params})
+\t}}
+}}
+",
+        struct = id.original, params = data_init_params
+    )?;
+
+    Ok(())
 }

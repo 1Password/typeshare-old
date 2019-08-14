@@ -38,7 +38,7 @@ pub trait Language {
     fn write_comment(&mut self, w: &mut dyn Write, _indent: usize, comment: &str) -> std::io::Result<()>;
     fn write_begin_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()>;
     fn write_end_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()>;
-    fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()>;
+    fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id, enum_type: Option<&syn::Lit>) -> std::io::Result<()>;
     fn write_end_enum(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()>;
     fn write_field(&mut self, w: &mut dyn Write, ident: &Id, _optional: bool, _ty: &str) -> std::io::Result<()>;
     fn write_vec_field(&mut self, w: &mut dyn Write, ident: &Id, _optional: bool, _ty: &str) -> std::io::Result<()>;
@@ -124,7 +124,8 @@ impl<'l, 'w> Generator<'l, 'w> {
 
     fn process_const_enum(&mut self, e: &syn::ItemEnum) -> std::io::Result<()> {
         let ident = get_ident(Some(&e.ident), &e.attrs);
-        self.language.write_begin_enum(self.writer, &ident)?;
+        let enum_type = get_const_enum_type(e);
+        self.language.write_begin_enum(self.writer, &ident, enum_type)?;
         for v in e.variants.iter() {
             self.process_const_enum_variant(&v)?;
         }
@@ -185,6 +186,18 @@ fn is_const_enum(e: &syn::ItemEnum) -> bool {
     }
 
     true
+}
+
+fn get_const_enum_type(e: &syn::ItemEnum) -> Option<&syn::Lit> {
+    if is_const_enum(e) {
+        if let Some(discriminant) = &e.variants.first().unwrap().into_value().discriminant {
+            return match &discriminant.1 {
+                syn::Expr::Lit(expr_lit) => Some(&expr_lit.lit),
+                _ => None,
+            };
+        }
+    }
+    None
 }
 
 fn type_as_string(ty: &syn::Type) -> String {
