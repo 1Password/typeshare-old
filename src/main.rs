@@ -1,9 +1,10 @@
 use clap::{App, Arg};
+use language::{Generator, Language};
 
+mod java;
 mod language;
 mod swift;
 mod typescript;
-use language::{Generator, Language};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -25,7 +26,7 @@ fn main() {
     let mut out = std::io::stdout();
 
     let mut lang: Box<dyn Language> = match matches.value_of("TYPE") {
-        Some("java") => Box::new(typescript::TypeScript {}),
+        Some("java") => Box::new(java::Java {}),
         Some("swift") => Box::new(swift::Swift::new()),
         Some("ts") => Box::new(typescript::TypeScript {}),
         _ => Box::new(typescript::TypeScript {}),
