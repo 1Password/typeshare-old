@@ -78,6 +78,62 @@ export interface Person {
 }
 
 #[test]
+fn can_handle_serde_rename_all() {
+    let mut out: Vec<u8> = Vec::new();
+    let mut lang = typescript::TypeScript {};
+    let mut g = Generator::new(&mut lang, &mut out);
+
+    let source = r##"
+/// This is a Person struct with camelCase rename
+#[serde(default, rename_all = "camelCase")]
+pub struct Person {
+    pub first_name: String,
+    pub last_name: String,
+    pub age: u8,
+    pub extra_special_field1: i32,
+    pub extra_special_field2: Option<Vec<String>>,
+}
+
+/// This is a Person2 struct with UPPERCASE rename
+#[serde(default, rename_all = "UPPERCASE")]
+pub struct Person2 {
+    pub first_name: String,
+    pub last_name: String,
+    pub age: u8,
+}
+
+"##;
+    assert!(g.process_source(source.to_string()).is_ok(), "must be able to process the source");
+    let result = String::from_utf8(out).unwrap();
+
+    let expected = "// 
+// Generated
+// 
+
+// This is a Person struct with camelCase rename
+export interface Person {
+	firstName: string;
+	lastName: string;
+	age: number;
+	extraSpecialField1: number;
+	extraSpecialField2?: string[];
+}
+
+// This is a Person2 struct with UPPERCASE rename
+export interface Person2 {
+	FIRST_NAME: string;
+	LAST_NAME: string;
+	AGE: number;
+}
+
+";
+
+    assert_eq!(expected, &result);
+    println!("{}", result);
+}
+
+
+#[test]
 fn can_generate_simple_enum() {
     let mut out: Vec<u8> = Vec::new();
     let mut lang = typescript::TypeScript {};

@@ -1,5 +1,8 @@
 use std::{error::Error, fs, io::Write};
 use syn;
+use proc_macro2::{Ident, Span};
+
+use inflector::Inflector;
 
 const COMMENT_PREFIX: &str = "= \" ";
 const COMMENT_SUFFIX: &str = "\"";
@@ -48,12 +51,13 @@ pub trait Language {
 
 pub struct Generator<'l, 'w> {
     language: &'l mut dyn Language,
-    pub writer: &'w mut dyn Write,
+    writer: &'w mut dyn Write,
+    serde_rename_all: Option<String>,
 }
 
 impl<'l, 'w> Generator<'l, 'w> {
     pub fn new(language: &'l mut dyn Language, writer: &'w mut dyn Write) -> Self {
-        Self { language, writer }
+        Self { language, writer, serde_rename_all: None }
     }
 
     pub fn process_file(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
@@ -80,13 +84,16 @@ impl<'l, 'w> Generator<'l, 'w> {
     }
 
     fn process_struct(&mut self, s: &syn::ItemStruct) -> std::io::Result<()> {
+        self.serde_rename_all = serde_rename_all(&s.attrs);
         self.process_comment_attrs(0, &s.attrs)?;
-        let ident = get_ident(Some(&s.ident), &s.attrs);
+
+        let ident = get_ident(Some(&s.ident), &s.attrs, &self.serde_rename_all);
         self.language.write_begin_struct(self.writer, &ident)?;
         for f in s.fields.iter() {
             self.process_field(&f)?;
         }
         self.language.write_end_struct(self.writer, &ident)?;
+        self.serde_rename_all = None;
         Ok(())
     }
 
@@ -99,7 +106,7 @@ impl<'l, 'w> Generator<'l, 'w> {
             ty = remove_prefix_suffix(&ty, OPTION_PREFIX, OPTION_SUFFIX);
         }
 
-        let ident = get_ident(f.ident.as_ref(), &f.attrs);
+        let ident = get_ident(f.ident.as_ref(), &f.attrs, &self.serde_rename_all);
 
         if ty.starts_with(VEC_PREFIX) {
             let ty = &remove_prefix_suffix(&ty, VEC_PREFIX, VEC_SUFFIX);
@@ -112,6 +119,7 @@ impl<'l, 'w> Generator<'l, 'w> {
     }
 
     fn process_enum(&mut self, e: &syn::ItemEnum) -> std::io::Result<()> {
+        self.serde_rename_all = serde_rename_all(&e.attrs);
         self.process_comment_attrs(0, &e.attrs)?;
         if is_const_enum(e) {
             self.process_const_enum(e)?;
@@ -119,11 +127,12 @@ impl<'l, 'w> Generator<'l, 'w> {
             self.process_algebraic_enum(e)?;
         }
 
+        self.serde_rename_all = None;
         Ok(())
     }
 
     fn process_const_enum(&mut self, e: &syn::ItemEnum) -> std::io::Result<()> {
-        let ident = get_ident(Some(&e.ident), &e.attrs);
+        let ident = get_ident(Some(&e.ident), &e.attrs, &self.serde_rename_all);
         let enum_type = get_const_enum_type(e);
         self.language.write_begin_enum(self.writer, &ident, enum_type)?;
         for v in e.variants.iter() {
@@ -156,7 +165,8 @@ impl<'l, 'w> Generator<'l, 'w> {
             }
         };
 
-        self.language.write_const_enum_variant(self.writer, &get_ident(Some(&v.ident), &v.attrs), &value)?;
+        let ident = get_ident(Some(&v.ident), &v.attrs, &self.serde_rename_all);
+        self.language.write_const_enum_variant(self.writer, &ident, &value)?;
         Ok(())
     }
 
@@ -208,30 +218,110 @@ fn type_as_string(ty: &syn::Type) -> String {
     tokens.to_string()
 }
 
-fn get_ident(ident: Option<&proc_macro2::Ident>, attrs: &[syn::Attribute]) -> Id {
+fn get_ident(ident: Option<&proc_macro2::Ident>, attrs: &[syn::Attribute], rename_all: &Option<String>) -> Id {
     let original = ident.map_or("???".to_string(), |id| id.to_string().replace("r#", ""));
-    match serde_rename(attrs) {
-        Some(s) => Id { original, renamed: s },
-        None => Id {
-            original: original.clone(),
-            renamed: original,
-        },
+    
+    let mut renamed = match rename_all {
+        None => original.clone(),
+        Some(value) => {
+            match value.as_str() {
+                "lowercase" => original.to_lowercase(),
+                "UPPERCASE" => original.to_uppercase(),
+                "PascalCase" => original.to_pascal_case(),
+                "camelCase" => original.to_camel_case(),
+                "snake_case" => original.to_snake_case(),
+                "SCREAMING_SNAKE_CASE" => original.to_screaming_snake_case(),
+                "kebab-case" => original.to_kebab_case(),
+                "SCREAMING-KEBAB-CASE" => original.to_kebab_case(),
+                _ => original.clone(),
+            }
+        }
+    };
+
+    if let Some(s) = serde_rename(attrs) {
+        renamed = s;
     }
+
+    Id { original, renamed }
 }
 
 fn serde_rename(attrs: &[syn::Attribute]) -> Option<String> {
-    const RENAME_PREFIX: &str = r##"rename = ""##;
-    const RENAME_SUFFIX: &str = r##"""##;
+    const PREFIX: &str = r##"rename = ""##;
+    const SUFFIX: &str = r##"""##;
+    attr_value(attrs, PREFIX, SUFFIX)
+}
 
-    for a in attrs.iter() {
-        let attr_as_string = a.tts.to_string();
-        let values = parse_attr(&attr_as_string)?;
+fn serde_rename_all(attrs: &[syn::Attribute]) -> Option<String> {
+    const PREFIX: &str = r##"rename_all = ""##;
+    const SUFFIX: &str = r##"""##;
+    attr_value(attrs, PREFIX, SUFFIX)
+}
 
-        for v in values {
-            if v.starts_with(RENAME_PREFIX) && v.ends_with(RENAME_SUFFIX) {
-                return Some(remove_prefix_suffix(&v, RENAME_PREFIX, RENAME_SUFFIX).to_string());
+/*
+    Process attributes and return value of the matching attribute, if found.
+    
+    ```
+    [
+    Attribute 
+        { 
+            pound_token: Pound, 
+            style: Outer, 
+            bracket_token: Bracket, 
+            path: Path { 
+                leading_colon: None, 
+                segments: [
+                    PathSegment { ident: Ident(doc), arguments: None }
+                ] 
+            }, 
+            tts: TokenStream [
+                Punct { op: '=', spacing: Alone }, 
+                Literal { lit: " This is a comment." }] 
+        }, 
+        
+    Attribute 
+        { 
+            pound_token: Pound, 
+            style: Outer, 
+            bracket_token: Bracket, 
+            path: Path { 
+                leading_colon: None, 
+                segments: [
+                    PathSegment { ident: Ident(serde), arguments: None }
+                ] 
+            }
+            tts: TokenStream [
+                Group { 
+                    delimiter: Parenthesis, 
+                    stream: TokenStream [
+                        Ident { sym: default }, 
+                        Punct { op: ',', spacing: Alone }, 
+                        Ident { sym: rename_all }, 
+                        Punct { op: '=', spacing: Alone }, 
+                        Literal { lit: "camelCase" }
+                    ]
+                }
+            ]
+        }
+    ]
+    ```
+*/
+fn attr_value(attrs: &[syn::Attribute], prefix: &'static str, suffix: &'static str) -> Option<String> {
+    for a in attrs {
+        if let Some(segment) = a.path.segments.iter().next() {
+            if segment.ident != Ident::new("serde", Span::call_site()) {
+                continue;
+            }
+
+            let attr_as_string = a.tts.to_string();
+            let values = parse_attr(&attr_as_string)?;
+
+            for v in values {
+                if v.starts_with(prefix) && v.ends_with(suffix) {
+                    return Some(remove_prefix_suffix(&v, prefix, suffix).to_string());
+                }
             }
         }
+        
     }
 
     None
