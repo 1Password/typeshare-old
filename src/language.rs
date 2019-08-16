@@ -1,6 +1,6 @@
+use proc_macro2::{Ident, Span};
 use std::{error::Error, fs, io::Write};
 use syn;
-use proc_macro2::{Ident, Span};
 
 use inflector::Inflector;
 
@@ -13,6 +13,7 @@ const OPTION_SUFFIX: &str = " >";
 const VEC_PREFIX: &str = "Vec < ";
 const VEC_SUFFIX: &str = " >";
 
+/// Identifier used in Rust structs, enums, and fields. It includes the `original` name and the `renamed` value after the transformation based on `serde` attributes.
 #[derive(Clone)]
 pub struct Id {
     pub original: String,
@@ -29,6 +30,36 @@ impl std::fmt::Display for Id {
     }
 }
 
+/// Rust struct.
+pub struct RustStruct {
+    pub id: Id,
+    pub fields: Vec<RustField>,
+    pub comments: Vec<String>,
+}
+
+/// Rust field defintion.
+pub struct RustField {
+    pub id: Id,
+    pub ty: String,
+    pub is_optional: bool,
+    pub is_vec: bool,
+    pub comments: Vec<String>,
+}
+
+/// Definition of constant enums.
+pub struct RustConstEnum {
+    pub id: Id,
+    pub comments: Vec<String>,
+    pub ty: Option<syn::Lit>,
+    pub consts: Vec<RustConst>,
+}
+
+pub struct RustConst {
+    pub id: Id,
+    pub comments: Vec<String>,
+    pub value: Option<syn::ExprLit>,
+}
+
 pub trait Language {
     fn begin(&mut self, _w: &mut dyn Write) -> std::io::Result<()> {
         Ok(())
@@ -38,150 +69,176 @@ pub trait Language {
         Ok(())
     }
 
-    fn write_comment(&mut self, w: &mut dyn Write, _indent: usize, comment: &str) -> std::io::Result<()>;
-    fn write_begin_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()>;
-    fn write_end_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()>;
-    fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id, enum_type: Option<&syn::Lit>) -> std::io::Result<()>;
-    fn write_end_enum(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()>;
-    fn write_field(&mut self, w: &mut dyn Write, ident: &Id, _optional: bool, _ty: &str) -> std::io::Result<()>;
-    fn write_vec_field(&mut self, w: &mut dyn Write, ident: &Id, _optional: bool, _ty: &str) -> std::io::Result<()>;
-    fn write_const_enum_variant(&mut self, w: &mut dyn Write, ident: &Id, value: &str) -> std::io::Result<()>;
-    fn lit_value(&self, l: &syn::ExprLit) -> String;
+    fn write_struct(&mut self, w: &mut dyn Write, rs: &RustStruct) -> std::io::Result<()>;
+    fn write_const_enum(&mut self, w: &mut dyn Write, e: &RustConstEnum) -> std::io::Result<()>;
 }
 
-pub struct Generator<'l, 'w> {
+pub struct Generator<'l> {
     language: &'l mut dyn Language,
-    writer: &'w mut dyn Write,
     serde_rename_all: Option<String>,
+
+    structs: Vec<RustStruct>,
+    const_enums: Vec<RustConstEnum>,
 }
 
-impl<'l, 'w> Generator<'l, 'w> {
-    pub fn new(language: &'l mut dyn Language, writer: &'w mut dyn Write) -> Self {
-        Self { language, writer, serde_rename_all: None }
+impl<'l> Generator<'l> {
+    pub fn new(language: &'l mut dyn Language) -> Self {
+        Self {
+            language,
+            serde_rename_all: None,
+
+            structs: Vec::new(),
+            const_enums: Vec::new(),
+        }
     }
 
-    pub fn process_file(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
+    pub fn process_file(&mut self, filename: &str, w: &mut dyn Write) -> Result<(), Box<dyn Error>> {
         let source = fs::read_to_string(filename)?;
-        self.process_source(source)
+        self.process_source(source, w)?;
+        Ok(())
     }
 
-    pub fn process_source(&mut self, source: String) -> Result<(), Box<dyn Error>> {
+    pub fn process_source(&mut self, source: String, w: &mut dyn Write) -> Result<(), Box<dyn Error>> {
         let source = syn::parse_file(&source)?;
-
-        self.language.begin(self.writer)?;
-
         for item in source.items.iter() {
             match item {
-                syn::Item::Struct(s) => self.process_struct(&s)?,
-                syn::Item::Enum(e) => self.process_enum(&e)?,
+                syn::Item::Struct(s) => self.parse_struct(&s)?,
+                syn::Item::Enum(e) => self.parse_enum(&e)?,
                 syn::Item::Fn(_) => {}
                 _ => {}
             }
         }
 
-        self.language.end(self.writer)?;
+        self.write(w)?;
         Ok(())
     }
 
-    fn process_struct(&mut self, s: &syn::ItemStruct) -> std::io::Result<()> {
-        self.serde_rename_all = serde_rename_all(&s.attrs);
-        self.process_comment_attrs(0, &s.attrs)?;
+    pub fn write(&mut self, w: &mut dyn Write) -> Result<(), Box<dyn Error>> {
+        self.language.begin(w)?;
 
-        let ident = get_ident(Some(&s.ident), &s.attrs, &self.serde_rename_all);
-        self.language.write_begin_struct(self.writer, &ident)?;
-        for f in s.fields.iter() {
-            self.process_field(&f)?;
+        for s in &self.structs {
+            self.language.write_struct(w, &s)?;
         }
-        self.language.write_end_struct(self.writer, &ident)?;
-        self.serde_rename_all = None;
+
+        for e in &self.const_enums {
+            self.language.write_const_enum(w, &e)?;
+        }
+
+        self.language.end(w)?;
         Ok(())
     }
 
-    fn process_field(&mut self, f: &syn::Field) -> std::io::Result<()> {
-        self.process_comment_attrs(1, &f.attrs)?;
+    fn parse_struct(&mut self, s: &syn::ItemStruct) -> std::io::Result<()> {
+        self.serde_rename_all = serde_rename_all(&s.attrs);
 
+        let mut rs = RustStruct {
+            id: get_ident(Some(&s.ident), &s.attrs, &self.serde_rename_all),
+            fields: Vec::new(),
+            comments: Vec::new(),
+        };
+        self.parse_comment_attrs(&mut rs.comments, &s.attrs)?;
+
+        for f in s.fields.iter() {
+            self.parse_field(&mut rs, &f)?;
+        }
+
+        self.serde_rename_all = None;
+        self.structs.push(rs);
+        Ok(())
+    }
+
+    fn parse_field(&mut self, rs: &mut RustStruct, f: &syn::Field) -> std::io::Result<()> {
         let mut ty: &str = &type_as_string(&f.ty);
-        let optional = ty.starts_with(OPTION_PREFIX);
-        if optional {
+        let is_optional = ty.starts_with(OPTION_PREFIX);
+        if is_optional {
             ty = remove_prefix_suffix(&ty, OPTION_PREFIX, OPTION_SUFFIX);
         }
 
-        let ident = get_ident(f.ident.as_ref(), &f.attrs, &self.serde_rename_all);
-
-        if ty.starts_with(VEC_PREFIX) {
-            let ty = &remove_prefix_suffix(&ty, VEC_PREFIX, VEC_SUFFIX);
-            self.language.write_vec_field(self.writer, &ident, optional, ty)?;
-        } else {
-            self.language.write_field(self.writer, &ident, optional, ty)?;
+        let is_vec = ty.starts_with(VEC_PREFIX);
+        if is_vec {
+            ty = &remove_prefix_suffix(&ty, VEC_PREFIX, VEC_SUFFIX);
         }
 
+        let mut rf = RustField {
+            id: get_ident(f.ident.as_ref(), &f.attrs, &self.serde_rename_all),
+            ty: ty.to_owned(),
+            is_optional,
+            is_vec,
+            comments: Vec::new(),
+        };
+        self.parse_comment_attrs(&mut rf.comments, &f.attrs)?;
+
+        rs.fields.push(rf);
         Ok(())
     }
 
-    fn process_enum(&mut self, e: &syn::ItemEnum) -> std::io::Result<()> {
+    fn parse_enum(&mut self, e: &syn::ItemEnum) -> std::io::Result<()> {
         self.serde_rename_all = serde_rename_all(&e.attrs);
-        self.process_comment_attrs(0, &e.attrs)?;
         if is_const_enum(e) {
-            self.process_const_enum(e)?;
+            self.parse_const_enum(e)?;
         } else {
-            self.process_algebraic_enum(e)?;
+            self.parse_algebraic_enum(e)?;
         }
-
         self.serde_rename_all = None;
         Ok(())
     }
 
-    fn process_const_enum(&mut self, e: &syn::ItemEnum) -> std::io::Result<()> {
-        let ident = get_ident(Some(&e.ident), &e.attrs, &self.serde_rename_all);
-        let enum_type = get_const_enum_type(e);
-        self.language.write_begin_enum(self.writer, &ident, enum_type)?;
-        for v in e.variants.iter() {
-            self.process_const_enum_variant(&v)?;
-        }
-        self.language.write_end_enum(self.writer, &ident)?;
-        Ok(())
-    }
-
-    fn process_algebraic_enum(&mut self, _e: &syn::ItemEnum) -> std::io::Result<()> {
-        Ok(())
-    }
-
-    fn process_const_enum_variant(&mut self, v: &syn::Variant) -> std::io::Result<()> {
-        self.process_comment_attrs(1, &v.attrs)?;
-        let value = {
-            if let Some(d) = &v.discriminant {
-                // if d.0 != syn::Token![=] {
-                //     panic!("unexpected token");
-                // }
-
-                match &d.1 {
-                    syn::Expr::Lit(l) => self.language.lit_value(l),
-                    _ => {
-                        panic!("unexpected expr");
-                    }
-                }
-            } else {
-                "".to_string()
-            }
+    fn parse_const_enum(&mut self, e: &syn::ItemEnum) -> std::io::Result<()> {
+        let mut re = RustConstEnum {
+            id: get_ident(Some(&e.ident), &e.attrs, &self.serde_rename_all),
+            comments: Vec::new(),
+            ty: get_const_enum_type(e).clone(),
+            consts: Vec::new(),
         };
+        self.parse_comment_attrs(&mut re.comments, &e.attrs)?;
 
-        let ident = get_ident(Some(&v.ident), &v.attrs, &self.serde_rename_all);
-        self.language.write_const_enum_variant(self.writer, &ident, &value)?;
+        for v in e.variants.iter() {
+            let mut rc = RustConst {
+                id: get_ident(Some(&v.ident), &v.attrs, &self.serde_rename_all),
+                value: get_discriminant(&v),
+                comments: Vec::new(),
+            };
+
+            self.parse_comment_attrs(&mut rc.comments, &v.attrs)?;
+            re.consts.push(rc);
+        }
+
+        self.const_enums.push(re);
+
+        Ok(())
+    }
+
+    fn parse_algebraic_enum(&mut self, _e: &syn::ItemEnum) -> std::io::Result<()> {
         Ok(())
     }
 
     //----
 
-    fn process_comment_attrs(&mut self, indent: usize, attrs: &[syn::Attribute]) -> std::io::Result<()> {
+    fn parse_comment_attrs(&mut self, comments: &mut Vec<String>, attrs: &[syn::Attribute]) -> std::io::Result<()> {
         for a in attrs.iter() {
             let s = a.tts.to_string();
             if s.starts_with(COMMENT_PREFIX) {
-                self.language.write_comment(self.writer, indent, remove_prefix_suffix(&s, COMMENT_PREFIX, COMMENT_SUFFIX))?;
+                comments.push(remove_prefix_suffix(&s, COMMENT_PREFIX, COMMENT_SUFFIX).to_owned());
             }
         }
 
         Ok(())
     }
+}
+
+fn get_discriminant(v: &syn::Variant) -> Option<syn::ExprLit> {
+    if let Some(d) = &v.discriminant {
+        match &d.1 {
+            syn::Expr::Lit(l) => {
+                return Some(l.clone());
+            }
+            _ => {
+                panic!("unexpected expr");
+            }
+        }
+    }
+
+    None
 }
 
 fn is_const_enum(e: &syn::ItemEnum) -> bool {
@@ -198,11 +255,11 @@ fn is_const_enum(e: &syn::ItemEnum) -> bool {
     true
 }
 
-fn get_const_enum_type(e: &syn::ItemEnum) -> Option<&syn::Lit> {
+fn get_const_enum_type(e: &syn::ItemEnum) -> Option<syn::Lit> {
     if is_const_enum(e) {
         if let Some(discriminant) = &e.variants.first().unwrap().into_value().discriminant {
             return match &discriminant.1 {
-                syn::Expr::Lit(expr_lit) => Some(&expr_lit.lit),
+                syn::Expr::Lit(expr_lit) => Some(expr_lit.lit.clone()),
                 _ => None,
             };
         }
@@ -220,22 +277,19 @@ fn type_as_string(ty: &syn::Type) -> String {
 
 fn get_ident(ident: Option<&proc_macro2::Ident>, attrs: &[syn::Attribute], rename_all: &Option<String>) -> Id {
     let original = ident.map_or("???".to_string(), |id| id.to_string().replace("r#", ""));
-    
     let mut renamed = match rename_all {
         None => original.clone(),
-        Some(value) => {
-            match value.as_str() {
-                "lowercase" => original.to_lowercase(),
-                "UPPERCASE" => original.to_uppercase(),
-                "PascalCase" => original.to_pascal_case(),
-                "camelCase" => original.to_camel_case(),
-                "snake_case" => original.to_snake_case(),
-                "SCREAMING_SNAKE_CASE" => original.to_screaming_snake_case(),
-                "kebab-case" => original.to_kebab_case(),
-                "SCREAMING-KEBAB-CASE" => original.to_kebab_case(),
-                _ => original.clone(),
-            }
-        }
+        Some(value) => match value.as_str() {
+            "lowercase" => original.to_lowercase(),
+            "UPPERCASE" => original.to_uppercase(),
+            "PascalCase" => original.to_pascal_case(),
+            "camelCase" => original.to_camel_case(),
+            "snake_case" => original.to_snake_case(),
+            "SCREAMING_SNAKE_CASE" => original.to_screaming_snake_case(),
+            "kebab-case" => original.to_kebab_case(),
+            "SCREAMING-KEBAB-CASE" => original.to_kebab_case(),
+            _ => original.clone(),
+        },
     };
 
     if let Some(s) = serde_rename(attrs) {
@@ -259,44 +313,43 @@ fn serde_rename_all(attrs: &[syn::Attribute]) -> Option<String> {
 
 /*
     Process attributes and return value of the matching attribute, if found.
-    
     ```
     [
-    Attribute 
-        { 
-            pound_token: Pound, 
-            style: Outer, 
-            bracket_token: Bracket, 
-            path: Path { 
-                leading_colon: None, 
+    Attribute
+        {
+            pound_token: Pound,
+            style: Outer,
+            bracket_token: Bracket,
+            path: Path {
+                leading_colon: None,
                 segments: [
                     PathSegment { ident: Ident(doc), arguments: None }
-                ] 
-            }, 
+                ]
+            },
             tts: TokenStream [
-                Punct { op: '=', spacing: Alone }, 
-                Literal { lit: " This is a comment." }] 
-        }, 
-        
-    Attribute 
-        { 
-            pound_token: Pound, 
-            style: Outer, 
-            bracket_token: Bracket, 
-            path: Path { 
-                leading_colon: None, 
+                Punct { op: '=', spacing: Alone },
+                Literal { lit: " This is a comment." }]
+        },
+
+    Attribute
+        {
+            pound_token: Pound,
+            style: Outer,
+            bracket_token: Bracket,
+            path: Path {
+                leading_colon: None,
                 segments: [
                     PathSegment { ident: Ident(serde), arguments: None }
-                ] 
+                ]
             }
             tts: TokenStream [
-                Group { 
-                    delimiter: Parenthesis, 
+                Group {
+                    delimiter: Parenthesis,
                     stream: TokenStream [
-                        Ident { sym: default }, 
-                        Punct { op: ',', spacing: Alone }, 
-                        Ident { sym: rename_all }, 
-                        Punct { op: '=', spacing: Alone }, 
+                        Ident { sym: default },
+                        Punct { op: ',', spacing: Alone },
+                        Ident { sym: rename_all },
+                        Punct { op: '=', spacing: Alone },
                         Literal { lit: "camelCase" }
                     ]
                 }
@@ -321,7 +374,6 @@ fn attr_value(attrs: &[syn::Attribute], prefix: &'static str, suffix: &'static s
                 }
             }
         }
-        
     }
 
     None

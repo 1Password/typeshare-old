@@ -22,7 +22,6 @@ fn main() {
         .get_matches();
 
     let filename = matches.value_of("input.rs").unwrap();
-    let mut out = std::io::stdout();
 
     let mut lang: Box<dyn Language> = match matches.value_of("TYPE") {
         Some("java") => Box::new(typescript::TypeScript {}),
@@ -31,6 +30,8 @@ fn main() {
         _ => Box::new(typescript::TypeScript {}),
     };
 
-    let mut generator = Generator::new(lang.as_mut(), &mut out);
-    generator.process_file(filename).expect("failed to process");
+    let mut generator = Generator::new(lang.as_mut());
+
+    let mut out = std::io::stdout();
+    generator.process_file(filename, &mut out).expect("failed to process");
 }

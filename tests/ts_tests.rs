@@ -1,11 +1,11 @@
+use text_diff;
 use typeshare::language::Generator;
 use typeshare::typescript;
 
 #[test]
 fn can_generate_simple_struct_with_a_comment() {
-    let mut out: Vec<u8> = Vec::new();
     let mut lang = typescript::TypeScript {};
-    let mut g = Generator::new(&mut lang, &mut out);
+    let mut g = Generator::new(&mut lang);
 
     let source = "
 /// This is a comment.
@@ -17,7 +17,9 @@ pub struct Person {
 }
    
 ";
-    assert!(g.process_source(source.to_string()).is_ok(), "must be able to process the source");
+
+    let mut out: Vec<u8> = Vec::new();
+    assert!(g.process_source(source.to_string(), &mut out).is_ok(), "must be able to process the source");
     let result = String::from_utf8(out).unwrap();
 
     let expected = "// 
@@ -34,15 +36,16 @@ export interface Person {
 
 ";
 
+    if expected != result.as_str() {
+        text_diff::print_diff(expected, &result, " ");
+    }
     assert_eq!(expected, &result);
-    println!("{}", result);
 }
 
 #[test]
 fn can_handle_serde_rename() {
-    let mut out: Vec<u8> = Vec::new();
     let mut lang = typescript::TypeScript {};
-    let mut g = Generator::new(&mut lang, &mut out);
+    let mut g = Generator::new(&mut lang);
 
     let source = r##"
 /// This is a comment.
@@ -56,7 +59,9 @@ pub struct Person {
 }
    
 "##;
-    assert!(g.process_source(source.to_string()).is_ok(), "must be able to process the source");
+
+    let mut out: Vec<u8> = Vec::new();
+    assert!(g.process_source(source.to_string(), &mut out).is_ok(), "must be able to process the source");
     let result = String::from_utf8(out).unwrap();
 
     let expected = "// 
@@ -73,15 +78,16 @@ export interface Person {
 
 ";
 
+    if expected != result.as_str() {
+        text_diff::print_diff(expected, &result, " ");
+    }
     assert_eq!(expected, &result);
-    println!("{}", result);
 }
 
 #[test]
 fn can_handle_serde_rename_all() {
-    let mut out: Vec<u8> = Vec::new();
     let mut lang = typescript::TypeScript {};
-    let mut g = Generator::new(&mut lang, &mut out);
+    let mut g = Generator::new(&mut lang);
 
     let source = r##"
 /// This is a Person struct with camelCase rename
@@ -103,7 +109,9 @@ pub struct Person2 {
 }
 
 "##;
-    assert!(g.process_source(source.to_string()).is_ok(), "must be able to process the source");
+
+    let mut out: Vec<u8> = Vec::new();
+    assert!(g.process_source(source.to_string(), &mut out).is_ok(), "must be able to process the source");
     let result = String::from_utf8(out).unwrap();
 
     let expected = "// 
@@ -128,16 +136,16 @@ export interface Person2 {
 
 ";
 
+    if expected != result.as_str() {
+        text_diff::print_diff(expected, &result, " ");
+    }
     assert_eq!(expected, &result);
-    println!("{}", result);
 }
-
 
 #[test]
 fn can_generate_simple_enum() {
-    let mut out: Vec<u8> = Vec::new();
     let mut lang = typescript::TypeScript {};
-    let mut g = Generator::new(&mut lang, &mut out);
+    let mut g = Generator::new(&mut lang);
 
     let source = r##"
 /// This is a comment.
@@ -148,7 +156,9 @@ pub enum Colors {
 }
    
 "##;
-    assert!(g.process_source(source.to_string()).is_ok(), "must be able to process the source");
+
+    let mut out: Vec<u8> = Vec::new();
+    assert!(g.process_source(source.to_string(), &mut out).is_ok(), "must be able to process the source");
     let result = String::from_utf8(out).unwrap();
 
     let expected = "// 
@@ -164,6 +174,8 @@ export enum Colors {
 
 ";
 
+    if expected != result.as_str() {
+        text_diff::print_diff(expected, &result, " ");
+    }
     assert_eq!(expected, &result);
-    println!("{}", result);
 }

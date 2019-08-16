@@ -1,7 +1,6 @@
 use std::io::Write;
 
-use crate::language::Id;
-use crate::language::Language;
+use crate::language::{Language, RustConstEnum, RustStruct};
 
 pub struct TypeScript {}
 
@@ -21,70 +20,45 @@ fn typescript_type(s: &str) -> &str {
 
 impl Language for TypeScript {
     fn begin(&mut self, w: &mut dyn Write) -> std::io::Result<()> {
-        self.write_comment(w, 0, "")?;
-        self.write_comment(w, 0, "Generated")?;
-        self.write_comment(w, 0, "\n")?;
+        write_comment(w, 0, "")?;
+        write_comment(w, 0, "Generated")?;
+        write_comment(w, 0, "\n")?;
         Ok(())
     }
 
-    fn write_comment(&mut self, w: &mut dyn Write, indent: usize, comment: &str) -> std::io::Result<()> {
-        writeln!(w, "{}// {}", "\t".repeat(indent), comment)?;
-        Ok(())
-    }
+    fn write_struct(&mut self, w: &mut dyn Write, rs: &RustStruct) -> std::io::Result<()> {
+        write_comments(w, 0, &rs.comments)?;
+        writeln!(w, "export interface {} {{", rs.id.original)?;
 
-    fn write_begin_struct(&mut self, w: &mut dyn Write, id: &Id) -> std::io::Result<()> {
-        writeln!(w, "export interface {} {{", id.original)?;
-        Ok(())
-    }
+        for rf in rs.fields.iter() {
+            write_comments(w, 1, &rf.comments)?;
+            if rf.is_vec {
+                writeln!(w, "\t{}{}: {}[];", rf.id.renamed, option_symbol(rf.is_optional), typescript_type(&rf.ty))?;
+            } else {
+                writeln!(w, "\t{}{}: {};", rf.id.renamed, option_symbol(rf.is_optional), typescript_type(&rf.ty))?;
+            }
+        }
 
-    fn write_end_struct(&mut self, w: &mut dyn Write, _id: &Id) -> std::io::Result<()> {
         writeln!(w, "}}\n")?;
         Ok(())
     }
 
-    fn write_begin_enum(&mut self, w: &mut dyn Write, id: &Id, _enum_type: Option<&syn::Lit>) -> std::io::Result<()> {
-        writeln!(w, "export enum {} {{", id.original)?;
-        Ok(())
-    }
+    fn write_const_enum(&mut self, w: &mut dyn Write, e: &RustConstEnum) -> std::io::Result<()> {
+        write_comments(w, 0, &e.comments)?;
+        writeln!(w, "export enum {} {{", e.id.original)?;
 
-    fn write_end_enum(&mut self, w: &mut dyn Write, _id: &Id) -> std::io::Result<()> {
+        for c in e.consts.iter() {
+            let mut printed_value = lit_value(&c.value).to_string();
+            if printed_value == "" {
+                printed_value = format!(r##""{}""##, &c.id.renamed);
+            }
+
+            write_comments(w, 1, &c.comments)?;
+            writeln!(w, "\t{} = {},", c.id.original, &printed_value)?;
+        }
+
         writeln!(w, "}}\n")?;
         Ok(())
-    }
-
-    fn write_field(&mut self, w: &mut dyn Write, ident: &Id, optional: bool, ty: &str) -> std::io::Result<()> {
-        writeln!(w, "\t{}{}: {};", ident.renamed, option_symbol(optional), typescript_type(ty))?;
-        Ok(())
-    }
-
-    fn write_vec_field(&mut self, w: &mut dyn Write, ident: &Id, optional: bool, ty: &str) -> std::io::Result<()> {
-        writeln!(w, "\t{}{}: {}[];", ident.renamed, option_symbol(optional), typescript_type(ty))?;
-        Ok(())
-    }
-
-    fn write_const_enum_variant(&mut self, w: &mut dyn Write, ident: &Id, value: &str) -> std::io::Result<()> {
-        let mut printed_value = value.to_string();
-        if printed_value == "" {
-            printed_value = format!(r##""{}""##, &ident.renamed);
-        }
-
-        writeln!(w, "\t{} = {},", ident.original, &printed_value)?;
-
-        Ok(())
-    }
-
-    fn lit_value(&self, l: &syn::ExprLit) -> String {
-        match &l.lit {
-            syn::Lit::Str(s) => format!(r##""{}""##, s.value()),
-            // syn::Lit::ByteStr(s) => format!("[{}]", &s.value().as_slice()),
-            syn::Lit::Byte(s) => format!("{}", s.value()),
-            syn::Lit::Char(s) => format!("{}", s.value()),
-            syn::Lit::Int(s) => format!("{}", s.value()),
-            syn::Lit::Float(s) => format!("{}", s.value()),
-            syn::Lit::Bool(s) => format!(r##""{}""##, bool_literal(s.value)),
-            // syn::Lit::Verbatim(s) => format!(r##""{}""##, s.to_string()),
-            _ => "nope???".to_string(),
-        }
     }
 }
 
@@ -102,4 +76,35 @@ fn option_symbol(optional: bool) -> &'static str {
     } else {
         ""
     }
+}
+
+fn lit_value(l: &Option<syn::ExprLit>) -> String {
+    if l.is_none() {
+        return "".to_string();
+    }
+
+    match &l.as_ref().unwrap().lit {
+        syn::Lit::Str(s) => format!(r##""{}""##, s.value()),
+        // syn::Lit::ByteStr(s) => format!("[{}]", &s.value().as_slice()),
+        syn::Lit::Byte(s) => format!("{}", s.value()),
+        syn::Lit::Char(s) => format!("{}", s.value()),
+        syn::Lit::Int(s) => format!("{}", s.value()),
+        syn::Lit::Float(s) => format!("{}", s.value()),
+        syn::Lit::Bool(s) => format!(r##""{}""##, bool_literal(s.value)),
+        // syn::Lit::Verbatim(s) => format!(r##""{}""##, s.to_string()),
+        _ => "nope???".to_string(),
+    }
+}
+
+fn write_comment(w: &mut dyn Write, indent: usize, comment: &str) -> std::io::Result<()> {
+    writeln!(w, "{}// {}", "\t".repeat(indent), comment)?;
+    Ok(())
+}
+
+fn write_comments(w: &mut dyn Write, indent: usize, comments: &Vec<String>) -> std::io::Result<()> {
+    for c in comments {
+        write_comment(w, indent, &c)?;
+    }
+
+    Ok(())
 }
