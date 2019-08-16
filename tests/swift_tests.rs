@@ -1,13 +1,13 @@
+use text_diff;
 use typeshare::language::Generator;
 use typeshare::swift;
 
 #[test]
 fn can_generate_simple_struct_with_a_comment() {
-    let mut out: Vec<u8> = Vec::new();
-    let mut lang = swift::Swift::new();
-    let mut g = Generator::new(&mut lang, &mut out);
+	let mut lang = swift::Swift::new();
+	let mut g = Generator::new(&mut lang);
 
-    let source = "
+	let source = "
 /// This is a comment.
 pub struct Person {
 	pub name: String,
@@ -17,10 +17,12 @@ pub struct Person {
 }
    
 ";
-    assert!(g.process_source(source.to_string()).is_ok(), "must be able to process the source");
-    let result = String::from_utf8(out).unwrap();
 
-    let expected = "/// 
+	let mut out: Vec<u8> = Vec::new();
+	assert!(g.process_source(source.to_string(), &mut out).is_ok(), "must be able to process the source");
+	let result = String::from_utf8(out).unwrap();
+
+	let expected = "/// 
 /// Generated
 /// 
 
@@ -51,17 +53,19 @@ public extension Person {
 
 ";
 
-    assert_eq!(expected, &result);
-    println!("{}", result);
+	if expected != result.as_str() {
+		text_diff::print_diff(expected, &result, " ");
+	}
+
+	assert_eq!(expected, &result);
 }
 
 #[test]
 fn can_handle_serde_rename() {
-    let mut out: Vec<u8> = Vec::new();
-    let mut lang = swift::Swift::new();
-    let mut g = Generator::new(&mut lang, &mut out);
+	let mut lang = swift::Swift::new();
+	let mut g = Generator::new(&mut lang);
 
-    let source = r##"
+	let source = r##"
 /// This is a comment.
 pub struct Person {
 	pub name: String,
@@ -73,10 +77,12 @@ pub struct Person {
 }
    
 "##;
-    assert!(g.process_source(source.to_string()).is_ok(), "must be able to process the source");
-    let result = String::from_utf8(out).unwrap();
 
-    let expected = "/// 
+	let mut out: Vec<u8> = Vec::new();
+	assert!(g.process_source(source.to_string(), &mut out).is_ok(), "must be able to process the source");
+	let result = String::from_utf8(out).unwrap();
+
+	let expected = "/// 
 /// Generated
 /// 
 
@@ -107,17 +113,19 @@ public extension Person {
 
 ";
 
-    assert_eq!(expected, &result);
-    println!("{}", result);
+	if expected != result.as_str() {
+		text_diff::print_diff(expected, &result, " ");
+	}
+
+	assert_eq!(expected, &result);
 }
 
 #[test]
 fn can_generate_simple_enum() {
-    let mut out: Vec<u8> = Vec::new();
-    let mut lang = swift::Swift::new();
-    let mut g = Generator::new(&mut lang, &mut out);
+	let mut lang = swift::Swift::new();
+	let mut g = Generator::new(&mut lang);
 
-    let source = r##"
+	let source = r##"
 /// This is a comment.
 pub enum Colors {
 	Red = 0,
@@ -126,10 +134,12 @@ pub enum Colors {
 }
    
 "##;
-    assert!(g.process_source(source.to_string()).is_ok(), "must be able to process the source");
-    let result = String::from_utf8(out).unwrap();
 
-    let expected = "/// 
+	let mut out: Vec<u8> = Vec::new();
+	assert!(g.process_source(source.to_string(), &mut out).is_ok(), "must be able to process the source");
+	let result = String::from_utf8(out).unwrap();
+
+	let expected = "/// 
 /// Generated
 /// 
 
@@ -144,17 +154,19 @@ public enum Colors: Int, Codable {
 
 ";
 
-    assert_eq!(expected, &result);
-    println!("{}", result);
+	if expected != result.as_str() {
+		text_diff::print_diff(expected, &result, " ");
+	}
+
+	assert_eq!(expected, &result);
 }
 
 #[test]
 fn can_generate_bare_string_enum() {
-    let mut out: Vec<u8> = Vec::new();
-    let mut lang = swift::Swift::new();
-    let mut g = Generator::new(&mut lang, &mut out);
+	let mut lang = swift::Swift::new();
+	let mut g = Generator::new(&mut lang);
 
-    let source = r##"
+	let source = r##"
 /// This is a comment.
 pub enum Colors {
 	Red,
@@ -163,10 +175,11 @@ pub enum Colors {
 }
    
 "##;
-    assert!(g.process_source(source.to_string()).is_ok(), "must be able to process the source");
-    let result = String::from_utf8(out).unwrap();
+	let mut out: Vec<u8> = Vec::new();
+	assert!(g.process_source(source.to_string(), &mut out).is_ok(), "must be able to process the source");
+	let result = String::from_utf8(out).unwrap();
 
-    let expected = r#"/// 
+	let expected = r#"/// 
 /// Generated
 /// 
 
@@ -181,6 +194,8 @@ public enum Colors: String, Codable {
 
 "#;
 
-    assert_eq!(expected, &result);
-    println!("{}", result);
+	if expected != result.as_str() {
+		text_diff::print_diff(expected, &result, " ");
+	}
+	assert_eq!(expected, &result);
 }
