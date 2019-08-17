@@ -27,6 +27,7 @@ proc-macro2 = "0.4.30"
 quote = "0.6.13"
 syn = { version = "0.15.42", features = ["full", "visit", "printing", "extra-traits"] }
 Inflector = "0.11.4"
+typeshare_marker = "0.0.1"
 
 [dev-dependencies]
 text-diff = "0.4.0"

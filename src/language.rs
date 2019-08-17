@@ -326,10 +326,11 @@ fn serde_rename_all(attrs: &[syn::Attribute]) -> Option<String> {
 }
 
 fn has_typeshare_marker(attrs: &[syn::Attribute]) -> bool {
-    const TYPESHARE_MARKER: &str = "TypeShare";
+    const TYPESHARE_MARKER: &str = "typeshare";
+    let typeshare_ident = Ident::new(TYPESHARE_MARKER, Span::call_site());
     for a in attrs {
-        if let Some(values) = parse_attr(a.tts.to_string().as_str()) {
-            if values.contains(&TYPESHARE_MARKER) {
+        if let Some(segment) = a.path.segments.iter().next() {
+            if segment.ident == typeshare_ident {
                 return true;
             }
         }
