@@ -73,7 +73,12 @@ pub trait Language {
     fn write_const_enum(&mut self, w: &mut dyn Write, e: &RustConstEnum) -> std::io::Result<()>;
 }
 
+pub struct GeneratorParams {
+    pub use_marker: bool,
+}
+
 pub struct Generator<'l> {
+    params: GeneratorParams,
     language: &'l mut dyn Language,
     serde_rename_all: Option<String>,
 
@@ -82,8 +87,9 @@ pub struct Generator<'l> {
 }
 
 impl<'l> Generator<'l> {
-    pub fn new(language: &'l mut dyn Language) -> Self {
+    pub fn new(language: &'l mut dyn Language, params: GeneratorParams) -> Self {
         Self {
+            params,
             language,
             serde_rename_all: None,
 
@@ -129,6 +135,10 @@ impl<'l> Generator<'l> {
     }
 
     fn parse_struct(&mut self, s: &syn::ItemStruct) -> std::io::Result<()> {
+        if self.params.use_marker && !has_typeshare_marker(&s.attrs) {
+            return Ok(());
+        }
+
         self.serde_rename_all = serde_rename_all(&s.attrs);
 
         let mut rs = RustStruct {
@@ -173,6 +183,10 @@ impl<'l> Generator<'l> {
     }
 
     fn parse_enum(&mut self, e: &syn::ItemEnum) -> std::io::Result<()> {
+        if self.params.use_marker && !has_typeshare_marker(&e.attrs) {
+            return Ok(());
+        }
+
         self.serde_rename_all = serde_rename_all(&e.attrs);
         if is_const_enum(e) {
             self.parse_const_enum(e)?;
@@ -309,6 +323,19 @@ fn serde_rename_all(attrs: &[syn::Attribute]) -> Option<String> {
     const PREFIX: &str = r##"rename_all = ""##;
     const SUFFIX: &str = r##"""##;
     attr_value(attrs, PREFIX, SUFFIX)
+}
+
+fn has_typeshare_marker(attrs: &[syn::Attribute]) -> bool {
+    const TYPESHARE_MARKER: &str = "TypeShare";
+    for a in attrs {
+        if let Some(values) = parse_attr(a.tts.to_string().as_str()) {
+            if values.contains(&TYPESHARE_MARKER) {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 /*
