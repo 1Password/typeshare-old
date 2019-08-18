@@ -11,7 +11,6 @@ const ARG_TYPE: &str = "TYPE";
 const ARG_MARKER: &str = "MARKER";
 const ARG_SWIFT_PREFIX: &str = "SWIFTPREFIX";
 
-
 fn main() {
     let options = App::new("typeshare")
         .version(VERSION)
