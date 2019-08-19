@@ -1,65 +1,11 @@
 use proc_macro2::{Ident, Span};
-use std::{error::Error, fs, io::Write};
+use std::{error::Error, fs, io::Write, collections::HashMap};
+use parser::{RustConst, RustConstEnum, RustField, RustStruct, RustAttrs};
 use syn;
 
 use inflector::Inflector;
 
-const COMMENT_PREFIX: &str = "= \" ";
-const COMMENT_SUFFIX: &str = "\"";
-
-const OPTION_PREFIX: &str = "Option < ";
-const OPTION_SUFFIX: &str = " >";
-
-const VEC_PREFIX: &str = "Vec < ";
-const VEC_SUFFIX: &str = " >";
-
-/// Identifier used in Rust structs, enums, and fields. It includes the `original` name and the `renamed` value after the transformation based on `serde` attributes.
-#[derive(Clone)]
-pub struct Id {
-    pub original: String,
-    pub renamed: String,
-}
-
-impl std::fmt::Display for Id {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.original == self.renamed {
-            write!(f, "({})", self.original)
-        } else {
-            write!(f, "({}, {})", self.original, self.renamed)
-        }
-    }
-}
-
-/// Rust struct.
-pub struct RustStruct {
-    pub id: Id,
-    pub fields: Vec<RustField>,
-    pub comments: Vec<String>,
-}
-
-/// Rust field defintion.
-pub struct RustField {
-    pub id: Id,
-    pub ty: String,
-    pub is_optional: bool,
-    pub is_vec: bool,
-    pub comments: Vec<String>,
-}
-
-/// Definition of constant enums.
-pub struct RustConstEnum {
-    pub id: Id,
-    pub comments: Vec<String>,
-    pub ty: Option<syn::Lit>,
-    pub consts: Vec<RustConst>,
-}
-
-pub struct RustConst {
-    pub id: Id,
-    pub comments: Vec<String>,
-    pub value: Option<syn::ExprLit>,
-}
-
+/// Language-specific code generation
 pub trait Language {
     fn begin_file(&mut self, _w: &mut dyn Write, _params: &Params) -> std::io::Result<()> {
         Ok(())
@@ -73,6 +19,7 @@ pub trait Language {
     fn write_const_enum(&mut self, w: &mut dyn Write, params: &Params, e: &RustConstEnum) -> std::io::Result<()>;
 }
 
+/// Generator parameters, usually coming from the command-line options.
 pub struct Params {
     pub use_marker: bool,
     pub swift_prefix: String,
@@ -144,8 +91,9 @@ impl<'l> Generator<'l> {
 
         let mut rs = RustStruct {
             id: get_ident(Some(&s.ident), &s.attrs, &self.serde_rename_all),
-            fields: Vec::new(),
             comments: Vec::new(),
+            typeshare_attrs: HashMap::new(),
+            fields: Vec::new(),
         };
         self.parse_comment_attrs(&mut rs.comments, &s.attrs)?;
 
@@ -172,10 +120,10 @@ impl<'l> Generator<'l> {
 
         let mut rf = RustField {
             id: get_ident(f.ident.as_ref(), &f.attrs, &self.serde_rename_all),
+            comments: Vec::new(),
             ty: ty.to_owned(),
             is_optional,
             is_vec,
-            comments: Vec::new(),
         };
         self.parse_comment_attrs(&mut rf.comments, &f.attrs)?;
 
@@ -202,10 +150,12 @@ impl<'l> Generator<'l> {
         let mut re = RustConstEnum {
             id: get_ident(Some(&e.ident), &e.attrs, &self.serde_rename_all),
             comments: Vec::new(),
+            typeshare_attrs: HashMap::new(),
             ty: get_const_enum_type(e).clone(),
             consts: Vec::new(),
         };
         self.parse_comment_attrs(&mut re.comments, &e.attrs)?;
+        self.parse_typeshare_attrs(&mut re.typeshare_attrs, &e.attrs)?
 
         for v in e.variants.iter() {
             let mut rc = RustConst {
@@ -224,19 +174,6 @@ impl<'l> Generator<'l> {
     }
 
     fn parse_algebraic_enum(&mut self, _e: &syn::ItemEnum) -> std::io::Result<()> {
-        Ok(())
-    }
-
-    //----
-
-    fn parse_comment_attrs(&mut self, comments: &mut Vec<String>, attrs: &[syn::Attribute]) -> std::io::Result<()> {
-        for a in attrs.iter() {
-            let s = a.tts.to_string();
-            if s.starts_with(COMMENT_PREFIX) {
-                comments.push(remove_prefix_suffix(&s, COMMENT_PREFIX, COMMENT_SUFFIX).to_owned());
-            }
-        }
-
         Ok(())
     }
 }
@@ -387,6 +324,7 @@ fn has_typeshare_marker(attrs: &[syn::Attribute]) -> bool {
     ]
     ```
 */
+
 fn attr_value(attrs: &[syn::Attribute], prefix: &'static str, suffix: &'static str) -> Option<String> {
     for a in attrs {
         if let Some(segment) = a.path.segments.iter().next() {
@@ -425,4 +363,53 @@ fn remove_prefix_suffix<'a>(src: &'a str, prefix: &'static str, suffix: &'static
         return &src[prefix.len()..src.len() - suffix.len()];
     }
     src
+}
+
+fn parse_comment_attrs(comments: &mut Vec<String>, attrs: &[syn::Attribute]) -> std::io::Result<()> {
+    for a in attrs.iter() {
+        let s = a.tts.to_string();
+        if s.starts_with(COMMENT_PREFIX) {
+            comments.push(remove_prefix_suffix(&s, COMMENT_PREFIX, COMMENT_SUFFIX).to_owned());
+        }
+    }
+
+    Ok(())
+}
+
+// fn parse_typeshare_attrs(typeshare_attrs: &mut HashMap<String>, attrs: &[syn::Attribute]) -> std::io::Result<()> {
+//     for a in attrs.iter() {
+//         let s = a.tts.to_string();
+//         if s.starts_with(COMMENT_PREFIX) {
+//             comments.push(remove_prefix_suffix(&s, COMMENT_PREFIX, COMMENT_SUFFIX).to_owned());
+//         }
+//     }
+
+//     Ok(())
+// }
+
+
+fn parse_attrs(attrs: &[syn::Attribute]) -> HashMap<HashMap<String, String>> {
+    let mut result = HashMap::new(HashMap<String, String>);
+    for a in attrs {
+        if let Some(segment) = a.path.segments.iter().next() {
+            let key = segment.ident.to_string();
+            if let Some(mut map) = result.get_mut
+
+
+            if segment.ident != Ident::new("serde", Span::call_site()) {
+                continue;
+            }
+
+            let attr_as_string = a.tts.to_string();
+            let values = parse_attr(&attr_as_string)?;
+
+            for v in values {
+                if v.starts_with(prefix) && v.ends_with(suffix) {
+                    return Some(remove_prefix_suffix(&v, prefix, suffix).to_string());
+                }
+            }
+        }
+    }
+
+   
 }
