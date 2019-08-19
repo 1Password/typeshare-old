@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::language::{Language, RustConstEnum, RustStruct};
+use crate::language::{Language, RustAlgebraicEnum, RustConstEnum, RustStruct};
 
 pub struct TypeScript {}
 
@@ -47,7 +47,7 @@ impl Language for TypeScript {
         write_comments(w, 0, &e.comments)?;
         writeln!(w, "export enum {} {{", e.id.original)?;
 
-        for c in e.consts.iter() {
+        for c in e.cases.iter() {
             let mut printed_value = lit_value(&c.value).to_string();
             if printed_value == "" {
                 printed_value = format!(r##""{}""##, &c.id.renamed);
@@ -58,6 +58,23 @@ impl Language for TypeScript {
         }
 
         writeln!(w, "}}\n")?;
+        Ok(())
+    }
+
+    fn write_algebraic_enum(&mut self, w: &mut dyn Write, e: &RustAlgebraicEnum) -> std::io::Result<()> {
+        write_comments(w, 0, &e.comments)?;
+        write!(w, "export type {} = ", e.id.original)?;
+
+        for case in e.cases.iter() {
+            write_comments(w, 1, &case.comments)?;
+
+            if case.value.is_vec {
+                write!(w, "\n\t| {}[]", typescript_type(&case.value.ty))?;
+            } else {
+                write!(w, "\n\t| {}", typescript_type(&case.value.ty))?;
+            }
+        }
+        write!(w, ";\n\n")?;
         Ok(())
     }
 }

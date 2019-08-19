@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::language::{Language, RustConstEnum, RustStruct};
+use crate::language::{Language, RustAlgebraicEnum, RustConstEnum, RustStruct};
 
 pub struct Swift {}
 
@@ -90,7 +90,7 @@ impl Language for Swift {
         write_comments(w, 0, &e.comments)?;
         writeln!(w, "public enum {}: {}, Codable {{", e.id.original, swift_lit_type(&e.ty))?;
 
-        for c in e.consts.iter() {
+        for c in e.cases.iter() {
             write_comments(w, 1, &c.comments)?;
             let mut printed_value = lit_value(&c.value).to_string();
             if printed_value == "" {
@@ -101,6 +101,10 @@ impl Language for Swift {
         }
 
         writeln!(w, "}}\n")?;
+        Ok(())
+    }
+
+    fn write_algebraic_enum(&mut self, _w: &mut dyn Write, _e: &RustAlgebraicEnum) -> std::io::Result<()> {
         Ok(())
     }
 }

@@ -179,3 +179,38 @@ export enum Colors {
     }
     assert_eq!(expected, &result);
 }
+
+#[test]
+fn can_generate_algebraic_enum() {
+    let mut lang = typescript::TypeScript {};
+    let mut g = Generator::new(&mut lang);
+
+    let string_enum = r##"
+pub enum AdvancedColors {
+    string(String),
+    number(i32),
+    numberArray(Vec<i32>),
+    reallyCoolType(ItemDetailsFieldValue),
+}"##;
+
+    let mut out: Vec<u8> = Vec::new();
+    assert!(g.process_source(string_enum.to_string(), &mut out).is_ok(), "must be able to process the source");
+    let result = String::from_utf8(out).unwrap();
+
+    let expected = "// 
+// Generated
+// 
+
+export type AdvancedColors = 
+	| string
+	| number
+	| number[]
+	| ItemDetailsFieldValue;
+
+";
+
+    if expected != result.as_str() {
+        text_diff::print_diff(expected, &result, " ");
+    }
+    assert_eq!(expected, &result);
+}

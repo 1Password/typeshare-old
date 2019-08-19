@@ -46,18 +46,36 @@ pub struct RustField {
     pub comments: Vec<String>,
 }
 
+/// Definition of enums in Rust
+pub enum RustEnum {
+    Constant(RustConstEnum),
+    Algebraic(RustAlgebraicEnum),
+}
+
 /// Definition of constant enums.
 pub struct RustConstEnum {
     pub id: Id,
     pub comments: Vec<String>,
     pub ty: Option<syn::Lit>,
-    pub consts: Vec<RustConst>,
+    pub cases: Vec<RustConst>,
 }
 
 pub struct RustConst {
     pub id: Id,
     pub comments: Vec<String>,
     pub value: Option<syn::ExprLit>,
+}
+
+pub struct RustAlgebraicEnum {
+    pub id: Id,
+    pub comments: Vec<String>,
+    pub cases: Vec<RustAlgebraicEnumCase>,
+}
+
+pub struct RustAlgebraicEnumCase {
+    pub id: Id,
+    pub comments: Vec<String>,
+    pub value: RustField,
 }
 
 pub trait Language {
@@ -71,6 +89,7 @@ pub trait Language {
 
     fn write_struct(&mut self, w: &mut dyn Write, rs: &RustStruct) -> std::io::Result<()>;
     fn write_const_enum(&mut self, w: &mut dyn Write, e: &RustConstEnum) -> std::io::Result<()>;
+    fn write_algebraic_enum(&mut self, w: &mut dyn Write, e: &RustAlgebraicEnum) -> std::io::Result<()>;
 }
 
 pub struct Generator<'l> {
@@ -78,7 +97,7 @@ pub struct Generator<'l> {
     serde_rename_all: Option<String>,
 
     structs: Vec<RustStruct>,
-    const_enums: Vec<RustConstEnum>,
+    enums: Vec<RustEnum>,
 }
 
 impl<'l> Generator<'l> {
@@ -88,7 +107,7 @@ impl<'l> Generator<'l> {
             serde_rename_all: None,
 
             structs: Vec::new(),
-            const_enums: Vec::new(),
+            enums: Vec::new(),
         }
     }
 
@@ -120,8 +139,11 @@ impl<'l> Generator<'l> {
             self.language.write_struct(w, &s)?;
         }
 
-        for e in &self.const_enums {
-            self.language.write_const_enum(w, &e)?;
+        for e in &self.enums {
+            match e {
+                RustEnum::Constant(const_enum) => self.language.write_const_enum(w, &const_enum)?,
+                RustEnum::Algebraic(algebraic_enum) => self.language.write_algebraic_enum(w, &algebraic_enum)?,
+            }
         }
 
         self.language.end(w)?;
@@ -188,7 +210,7 @@ impl<'l> Generator<'l> {
             id: get_ident(Some(&e.ident), &e.attrs, &self.serde_rename_all),
             comments: Vec::new(),
             ty: get_const_enum_type(e).clone(),
-            consts: Vec::new(),
+            cases: Vec::new(),
         };
         self.parse_comment_attrs(&mut re.comments, &e.attrs)?;
 
@@ -200,15 +222,34 @@ impl<'l> Generator<'l> {
             };
 
             self.parse_comment_attrs(&mut rc.comments, &v.attrs)?;
-            re.consts.push(rc);
+            re.cases.push(rc);
         }
 
-        self.const_enums.push(re);
+        self.enums.push(RustEnum::Constant(re));
 
         Ok(())
     }
 
-    fn parse_algebraic_enum(&mut self, _e: &syn::ItemEnum) -> std::io::Result<()> {
+    fn parse_algebraic_enum(&mut self, e: &syn::ItemEnum) -> std::io::Result<()> {
+        let mut parsed_enum = RustAlgebraicEnum {
+            id: get_ident(Some(&e.ident), &e.attrs, &self.serde_rename_all),
+            comments: Vec::new(),
+            cases: Vec::new(),
+        };
+        self.parse_comment_attrs(&mut parsed_enum.comments, &e.attrs)?;
+
+        for variant in e.variants.iter() {
+            let mut parsed_case = RustAlgebraicEnumCase {
+                id: get_ident(Some(&variant.ident), &variant.attrs, &self.serde_rename_all),
+                value: get_algebraic_enum_case_value(&variant, &self.serde_rename_all),
+                comments: Vec::new(),
+            };
+            self.parse_comment_attrs(&mut parsed_case.comments, &variant.attrs)?;
+
+            parsed_enum.cases.push(parsed_case);
+        }
+        self.enums.push(RustEnum::Algebraic(parsed_enum));
+
         Ok(())
     }
 
@@ -239,6 +280,38 @@ fn get_discriminant(v: &syn::Variant) -> Option<syn::ExprLit> {
     }
 
     None
+}
+
+fn get_algebraic_enum_case_value(v: &syn::Variant, serde_rename_all: &Option<String>) -> RustField {
+    match &v.fields {
+        syn::Fields::Unnamed(associated_type) => {
+            if associated_type.unnamed.len() > 1 {
+                panic!("Unable to handle multiple unamed associated types yet");
+            }
+
+            let first_type = associated_type.unnamed.clone().first().unwrap().into_value().ty.clone();
+
+            let mut ty: &str = &type_as_string(&first_type);
+            let is_optional = ty.starts_with(OPTION_PREFIX);
+            if is_optional {
+                ty = remove_prefix_suffix(&ty, OPTION_PREFIX, OPTION_SUFFIX);
+            }
+
+            let is_vec = ty.starts_with(VEC_PREFIX);
+            if is_vec {
+                ty = &remove_prefix_suffix(&ty, VEC_PREFIX, VEC_SUFFIX);
+            }
+
+            return RustField {
+                id: get_ident(Some(&v.ident), &v.attrs, serde_rename_all),
+                ty: ty.to_owned(),
+                is_optional,
+                is_vec,
+                comments: Vec::new(),
+            };
+        }
+        _ => panic!("Call this method for Unnamed cases only"),
+    }
 }
 
 fn is_const_enum(e: &syn::ItemEnum) -> bool {
