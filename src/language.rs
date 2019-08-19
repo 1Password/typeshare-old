@@ -79,20 +79,26 @@ pub struct RustAlgebraicEnumCase {
 }
 
 pub trait Language {
-    fn begin(&mut self, _w: &mut dyn Write) -> std::io::Result<()> {
+    fn begin_file(&mut self, _w: &mut dyn Write, _params: &Params) -> std::io::Result<()> {
         Ok(())
     }
 
-    fn end(&mut self, _w: &mut dyn Write) -> std::io::Result<()> {
+    fn end_file(&mut self, _w: &mut dyn Write, _params: &Params) -> std::io::Result<()> {
         Ok(())
     }
 
-    fn write_struct(&mut self, w: &mut dyn Write, rs: &RustStruct) -> std::io::Result<()>;
-    fn write_const_enum(&mut self, w: &mut dyn Write, e: &RustConstEnum) -> std::io::Result<()>;
-    fn write_algebraic_enum(&mut self, w: &mut dyn Write, e: &RustAlgebraicEnum) -> std::io::Result<()>;
+    fn write_struct(&mut self, w: &mut dyn Write, params: &Params, rs: &RustStruct) -> std::io::Result<()>;
+    fn write_const_enum(&mut self, w: &mut dyn Write, params: &Params, e: &RustConstEnum) -> std::io::Result<()>;
+    fn write_algebraic_enum(&mut self, w: &mut dyn Write, params: &Params, e: &RustAlgebraicEnum) -> std::io::Result<()>;
+}
+
+pub struct Params {
+    pub use_marker: bool,
+    pub swift_prefix: String,
 }
 
 pub struct Generator<'l> {
+    params: Params,
     language: &'l mut dyn Language,
     serde_rename_all: Option<String>,
 
@@ -101,8 +107,9 @@ pub struct Generator<'l> {
 }
 
 impl<'l> Generator<'l> {
-    pub fn new(language: &'l mut dyn Language) -> Self {
+    pub fn new(language: &'l mut dyn Language, params: Params) -> Self {
         Self {
+            params,
             language,
             serde_rename_all: None,
 
@@ -133,24 +140,28 @@ impl<'l> Generator<'l> {
     }
 
     pub fn write(&mut self, w: &mut dyn Write) -> Result<(), Box<dyn Error>> {
-        self.language.begin(w)?;
+        self.language.begin_file(w, &self.params)?;
 
         for s in &self.structs {
-            self.language.write_struct(w, &s)?;
+            self.language.write_struct(w, &self.params, &s)?;
         }
 
         for e in &self.enums {
             match e {
-                RustEnum::Constant(const_enum) => self.language.write_const_enum(w, &const_enum)?,
-                RustEnum::Algebraic(algebraic_enum) => self.language.write_algebraic_enum(w, &algebraic_enum)?,
+                RustEnum::Constant(const_enum) => self.language.write_const_enum(w, &self.params, &const_enum)?,
+                RustEnum::Algebraic(algebraic_enum) => self.language.write_algebraic_enum(w, &self.params, &algebraic_enum)?,
             }
         }
 
-        self.language.end(w)?;
+        self.language.end_file(w, &self.params)?;
         Ok(())
     }
 
     fn parse_struct(&mut self, s: &syn::ItemStruct) -> std::io::Result<()> {
+        if self.params.use_marker && !has_typeshare_marker(&s.attrs) {
+            return Ok(());
+        }
+
         self.serde_rename_all = serde_rename_all(&s.attrs);
 
         let mut rs = RustStruct {
@@ -195,6 +206,10 @@ impl<'l> Generator<'l> {
     }
 
     fn parse_enum(&mut self, e: &syn::ItemEnum) -> std::io::Result<()> {
+        if self.params.use_marker && !has_typeshare_marker(&e.attrs) {
+            return Ok(());
+        }
+
         self.serde_rename_all = serde_rename_all(&e.attrs);
         if is_const_enum(e) {
             self.parse_const_enum(e)?;
@@ -382,6 +397,20 @@ fn serde_rename_all(attrs: &[syn::Attribute]) -> Option<String> {
     const PREFIX: &str = r##"rename_all = ""##;
     const SUFFIX: &str = r##"""##;
     attr_value(attrs, PREFIX, SUFFIX)
+}
+
+fn has_typeshare_marker(attrs: &[syn::Attribute]) -> bool {
+    const TYPESHARE_MARKER: &str = "typeshare";
+    let typeshare_ident = Ident::new(TYPESHARE_MARKER, Span::call_site());
+    for a in attrs {
+        if let Some(segment) = a.path.segments.iter().next() {
+            if segment.ident == typeshare_ident {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 /*
