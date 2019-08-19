@@ -191,10 +191,10 @@ fn write_struct_convenience_methods(w: &mut dyn Write, generator_params: &Params
         w,
         "
 public extension {prefix}{struct} {{
-\tinit(data: Data) throws {{
-\t\tlet decoded = try JSONDecoder().decode({struct}.self, from: data)
-\t\tself.init({params})
-\t}}
+	init(data: Data) throws {{
+		let decoded = try JSONDecoder().decode({prefix}{struct}.self, from: data)
+		self.init({params})
+	}}
 }}
 ",
         prefix = generator_params.swift_prefix, struct = rs.id.original, params = data_init_params

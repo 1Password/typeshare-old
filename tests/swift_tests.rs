@@ -122,7 +122,7 @@ public struct TypeShareX_Person: Codable {{
 
 public extension TypeShareX_Person {{
 	init(data: Data) throws {{
-		let decoded = try JSONDecoder().decode(Person.self, from: data)
+		let decoded = try JSONDecoder().decode(TypeShareX_Person.self, from: data)
 		self.init(name: decoded.name, age: decoded.age, extraSpecialFieldOne: decoded.extraSpecialFieldOne, extraSpecialFieldTwo: decoded.extraSpecialFieldTwo)
 	}}
 }}
@@ -241,7 +241,7 @@ fn can_generate_algebraic_enum() {
         &mut lang,
         Params {
             use_marker: false,
-            swift_prefix: "".to_string(),
+            swift_prefix: "OP".to_string(),
         },
     );
 
@@ -264,7 +264,7 @@ pub enum AdvancedColors {
 
 import Foundation
 
-public enum AdvancedColors: Codable {{
+public enum OPAdvancedColors: Codable {{
 	case string(String)
 	case number(Int32)
 	case numberArray([Int32])
@@ -288,7 +288,7 @@ public enum AdvancedColors: Codable {{
 			self = .reallyCoolType(x)
 			return
 		}}
-		throw DecodingError.typeMismatch(AdvancedColors.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for AdvancedColors"))
+		throw DecodingError.typeMismatch(OPAdvancedColors.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for OPAdvancedColors"))
 	}}
 
 	public func encode(to encoder: Encoder) throws {{
