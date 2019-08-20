@@ -9,4 +9,5 @@ WARNING: This utility is still in early development and not ready for production
 cargo install typeshare
 typeshare --type=ts some/file.rs
 typeshare --type=swift some/file.rs
+typeshare --type=java --use-marker --java-package=com.some.package.name some/file.rs
 ```
