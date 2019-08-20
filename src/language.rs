@@ -134,16 +134,18 @@ pub trait Language {
     }
 
     fn end_file(&mut self, _w: &mut dyn Write, _params: &Params) -> std::io::Result<()> {
-        Ok(())    
+        Ok(())
     }
-  
+
     fn write_struct(&mut self, w: &mut dyn Write, params: &Params, rs: &RustStruct) -> std::io::Result<()>;
 
     fn write_const_enum(&mut self, _w: &mut dyn Write, _params: &Params, _e: &RustConstEnum) -> std::io::Result<()> {
         Ok(())
-    } 
-    
-    fn write_algebraic_enum(&mut self, w: &mut dyn Write, params: &Params, e: &RustAlgebraicEnum) -> std::io::Result<()>;
+    }
+
+    fn write_algebraic_enum(&mut self, _w: &mut dyn Write, _params: &Params, _e: &RustAlgebraicEnum) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 pub struct Params {

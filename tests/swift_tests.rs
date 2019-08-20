@@ -246,6 +246,7 @@ fn can_generate_algebraic_enum() {
         Params {
             use_marker: false,
             swift_prefix: "OP".to_string(),
+            java_package: "".to_string(),
         },
     );
 
