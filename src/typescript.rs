@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::language::{Language, Params, RustConstEnum, RustStruct};
+use crate::language::{Language, Params, RustAlgebraicEnum, RustConstEnum, RustStruct};
 
 pub struct TypeScript {}
 
@@ -48,7 +48,7 @@ impl Language for TypeScript {
         write_comments(w, 0, &e.comments)?;
         writeln!(w, "export enum {} {{", e.id.original)?;
 
-        for c in e.consts.iter() {
+        for c in e.cases.iter() {
             let mut printed_value = lit_value(&c.value).to_string();
             if printed_value == "" {
                 printed_value = format!(r##""{}""##, &c.id.renamed);
@@ -59,6 +59,26 @@ impl Language for TypeScript {
         }
 
         writeln!(w, "}}\n")?;
+        Ok(())
+    }
+
+    fn write_algebraic_enum(&mut self, w: &mut dyn Write, _params: &Params, e: &RustAlgebraicEnum) -> std::io::Result<()> {
+        write_comments(w, 0, &e.comments)?;
+        write!(w, "export type {} = ", e.id.original)?;
+
+        for (index, case) in e.cases.iter().enumerate() {
+            if case.value.is_vec {
+                write!(w, "\n\t| {}[]", typescript_type(&case.value.ty))?;
+            } else {
+                write!(w, "\n\t| {}", typescript_type(&case.value.ty))?;
+            }
+            // If we're writing the last of the enum, add the semi-colon
+            if index == e.cases.len() - 1 {
+                write!(w, ";")?;
+            }
+            write_comments_inline(w, &case.comments)?;
+        }
+        write!(w, "\n\n")?;
         Ok(())
     }
 }
@@ -97,14 +117,27 @@ fn lit_value(l: &Option<syn::ExprLit>) -> String {
     }
 }
 
-fn write_comment(w: &mut dyn Write, indent: usize, comment: &str) -> std::io::Result<()> {
-    writeln!(w, "{}// {}", "\t".repeat(indent), comment)?;
+fn write_comment(w: &mut dyn Write, indent: usize, inline: bool, comment: &str) -> std::io::Result<()> {
+    let comment = format!("{}// {}", "\t".repeat(indent), comment);
+    if inline {
+        write!(w, "{}", comment)?;
+    } else {
+        writeln!(w, "{}", comment)?;
+    }
     Ok(())
 }
 
 fn write_comments(w: &mut dyn Write, indent: usize, comments: &Vec<String>) -> std::io::Result<()> {
     for c in comments {
-        write_comment(w, indent, &c)?;
+        write_comment(w, indent, false, &c)?;
+    }
+
+    Ok(())
+}
+
+fn write_comments_inline(w: &mut dyn Write, comments: &Vec<String>) -> std::io::Result<()> {
+    for c in comments {
+        write_comment(w, 1, true, &c)?;
     }
 
     Ok(())

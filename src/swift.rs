@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::language::{Language, Params, RustConstEnum, RustStruct};
+use crate::language::{Language, Params, RustAlgebraicEnum, RustConstEnum, RustStruct};
 
 pub struct Swift {}
 
@@ -91,7 +91,7 @@ impl Language for Swift {
         write_comments(w, 0, &e.comments)?;
         writeln!(w, "public enum {}{}: {}, Codable {{", params.swift_prefix, e.id.original, swift_lit_type(&e.ty))?;
 
-        for c in e.consts.iter() {
+        for c in e.cases.iter() {
             write_comments(w, 1, &c.comments)?;
             let mut printed_value = lit_value(&c.value).to_string();
             if printed_value == "" {
@@ -100,6 +100,63 @@ impl Language for Swift {
 
             writeln!(w, "\tcase {} = {}", c.id.renamed, &printed_value)?;
         }
+
+        writeln!(w, "}}\n")?;
+        Ok(())
+    }
+
+    fn write_algebraic_enum(&mut self, w: &mut dyn Write, params: &Params, e: &RustAlgebraicEnum) -> std::io::Result<()> {
+        write_comments(w, 0, &e.comments)?;
+        let enum_type_name = format!("{}{}", params.swift_prefix, e.id.original);
+        writeln!(w, "public enum {}: Codable {{", enum_type_name)?;
+
+        let mut decoding_cases: Vec<String> = Vec::new();
+        let mut encoding_cases: Vec<String> = Vec::new();
+
+        for c in e.cases.iter() {
+            write_comments(w, 1, &c.comments)?;
+            let case_type = if c.value.is_vec {
+                format!("[{}{}]", swift_type(&c.value.ty), option_symbol(c.value.is_optional))
+            } else {
+                format!("{}{}", swift_type(&c.value.ty), option_symbol(c.value.is_optional))
+            };
+
+            writeln!(w, "\tcase {}({})", c.id.renamed, case_type)?;
+
+            decoding_cases.push(format!(
+                "
+		if let x = try? container.decode({}.self) {{
+			self = .{}(x)
+			return
+		}}",
+                case_type, c.id.renamed,
+            ));
+
+            encoding_cases.push(format!(
+                "
+		case .{}(let x):
+			try container.encode(x)",
+                c.id.renamed,
+            ));
+        }
+
+        writeln!(
+            w,
+            r#"
+	public init(from decoder: Decoder) throws {{
+		let container = try decoder.singleValueContainer(){decoding_switch}
+		throw DecodingError.typeMismatch({type_name}.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for {type_name}"))
+	}}
+
+	public func encode(to encoder: Encoder) throws {{
+		var container = encoder.singleValueContainer()
+		switch self {{{encoding_switch}
+		}}
+	}}"#,
+            type_name = enum_type_name,
+            decoding_switch = decoding_cases.join(""),
+            encoding_switch = encoding_cases.join(""),
+        )?;
 
         writeln!(w, "}}\n")?;
         Ok(())
@@ -134,10 +191,10 @@ fn write_struct_convenience_methods(w: &mut dyn Write, generator_params: &Params
         w,
         "
 public extension {prefix}{struct} {{
-\tinit(data: Data) throws {{
-\t\tlet decoded = try JSONDecoder().decode({struct}.self, from: data)
-\t\tself.init({params})
-\t}}
+	init(data: Data) throws {{
+		let decoded = try JSONDecoder().decode({prefix}{struct}.self, from: data)
+		self.init({params})
+	}}
 }}
 ",
         prefix = generator_params.swift_prefix, struct = rs.id.original, params = data_init_params
