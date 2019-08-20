@@ -54,7 +54,7 @@ fn main() {
     let filename = options.value_of("input.rs").unwrap();
 
     let mut lang: Box<dyn Language> = match options.value_of(ARG_TYPE) {
-        Some("java") => Box::new(java::Java {}),
+        Some("java") => Box::new(java::Java::new()),
         Some("swift") => Box::new(swift::Swift::new()),
         Some("ts") => Box::new(typescript::TypeScript {}),
         Some("typescript") => Box::new(typescript::TypeScript {}),

@@ -3,7 +3,15 @@ use std::io::Write;
 
 use crate::language::{Language, Params, RustStruct, ACRONYMS};
 
-pub struct Java {}
+pub struct Java {
+    ids: Vec<String>,
+}
+
+impl Java {
+    pub fn new() -> Self {
+        Java { ids: Vec::new() }
+    }
+}
 
 fn java_type(s: &str) -> &str {
     match s {
@@ -45,6 +53,7 @@ impl Language for Java {
 
         write_comments(w, 0, &rs.comments)?;
         writeln!(w, "public class {} {{", rs.id.original)?;
+        self.ids.push(rs.id.original.clone());
 
         for rf in rs.fields.iter() {
             if rf.is_vec {
@@ -60,14 +69,66 @@ impl Language for Java {
     }
 
     fn end_file(&mut self, w: &mut dyn Write, _params: &Params) -> std::io::Result<()> {
-        writeln!(w, "/**")?;
-        writeln!(w, " * DONE")?;
-        writeln!(w, " */")?;
+        writeln!(w, "package {};", _params.java_package)?;
         writeln!(w)?;
-
+        writeln!(w, "import java.io.IOException;")?;
+        writeln!(w, "import com.fasterxml.jackson.databind.*;")?;
+        writeln!(w, "import com.fasterxml.jackson.core.JsonProcessingException;")?;
+        writeln!(w)?;
+        writeln!(w, "/**")?;
+        writeln!(w, " * Serialize/Deserialize helpers")?;
+        writeln!(w, " */")?;
+        writeln!(w, "public class Converter {{")?;
+        writeln!(w)?;
+        write_string_converter(&self.ids, 2, w)?;
+        write_reader_writer_converter(&self.ids, 2, w)?;
+        writeln!(w, "}}")?;
         Ok(())
     }
+}
 
+fn write_string_converter(ids: &Vec<String>, indent: usize, w: &mut dyn Write) -> std::io::Result<()> {
+    for id in ids {
+        writeln!(w, "{}public static {1} {1}FromJsonString(String json) throws IOException {{", "\t".repeat(indent - 1), id)?;
+        writeln!(w, "{}return get{1}ObjectReader().readValue(json);", "\t".repeat(indent), id)?;
+        writeln!(w, "{}}}", "\t".repeat(indent - 1))?;
+        writeln!(w)?;
+        writeln!(
+            w,
+            "{}public static String {1}ToJsonString({1} obj) throws JsonProcessingException {{",
+            "\t".repeat(indent - 1),
+            id
+        )?;
+        writeln!(w, "{}return get{1}ObjectWriter().writeValueAsString(obj);", "\t".repeat(indent), id)?;
+        writeln!(w, "{}}}", "\t".repeat(indent - 1))?;
+        writeln!(w)?;
+    }
+    Ok(())
+}
+
+fn write_reader_writer_converter(ids: &Vec<String>, indent: usize, w: &mut dyn Write) -> std::io::Result<()> {
+    for id in ids {
+        writeln!(w, "{}private static ObjectReader {}Reader;", "\t".repeat(indent - 1), id)?;
+        writeln!(w, "{}private static ObjectWriter {}Writer;", "\t".repeat(indent - 1), id)?;
+        writeln!(w)?;
+        writeln!(w, "{}private static void instantiate{}Mapper() {{", "\t".repeat(indent - 1), id)?;
+        writeln!(w, "{}ObjectMapper mapper = new ObjectMapper();", "\t".repeat(indent))?;
+        writeln!(w, "{}{1}Reader = mapper.readerFor({1}.class);", "\t".repeat(indent), id)?;
+        writeln!(w, "{}{1}Writer = mapper.writerFor({1}.class);", "\t".repeat(indent), id)?;
+        writeln!(w, "{}}}", "\t".repeat(indent - 1))?;
+        writeln!(w)?;
+        writeln!(w, "{}private static ObjectReader get{}ObjectReader() {{", "\t".repeat(indent - 1), id)?;
+        writeln!(w, "{}if ({1}Reader == null) instantiate{1}Mapper();", "\t".repeat(indent), id)?;
+        writeln!(w, "{}return {}Reader;", "\t".repeat(indent), id)?;
+        writeln!(w, "{}}}", "\t".repeat(indent - 1))?;
+        writeln!(w)?;
+        writeln!(w, "{}private static ObjectWriter get{}ObjectWriter() {{", "\t".repeat(indent - 1), id)?;
+        writeln!(w, "{}if ({1}Writer == null) instantiate{1}Mapper();", "\t".repeat(indent), id)?;
+        writeln!(w, "{}return {}Writer;", "\t".repeat(indent), id)?;
+        writeln!(w, "{}}}", "\t".repeat(indent - 1))?;
+        writeln!(w)?;
+    }
+    Ok(())
 }
 
 fn write_getter_setter(w: &mut dyn Write, _generator_params: &Params, rs: &RustStruct) -> std::io::Result<()> {
