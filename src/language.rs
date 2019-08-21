@@ -1,9 +1,19 @@
 use proc_macro2::{Ident, Span};
-use std::{error::Error, fs, io::Write, collections::HashMap};
-use parser::{RustConst, RustConstEnum, RustField, RustStruct, RustAttrs};
+use std::{error::Error, fs, io::Write};
+pub use crate::parser::{Id, RustConst, RustConstEnum, RustField, RustStruct, RustAttrs};
 use syn;
 
 use inflector::Inflector;
+
+const OPTION_PREFIX: &str = "Option < ";
+const OPTION_SUFFIX: &str = " >";
+
+const COMMENT_PREFIX: &str = "= \" ";
+const COMMENT_SUFFIX: &str = "\"";
+
+const VEC_PREFIX: &str = "Vec < ";
+const VEC_SUFFIX: &str = " >";
+
 
 /// Language-specific code generation
 pub trait Language {
@@ -89,13 +99,9 @@ impl<'l> Generator<'l> {
 
         self.serde_rename_all = serde_rename_all(&s.attrs);
 
-        let mut rs = RustStruct {
-            id: get_ident(Some(&s.ident), &s.attrs, &self.serde_rename_all),
-            comments: Vec::new(),
-            typeshare_attrs: HashMap::new(),
-            fields: Vec::new(),
-        };
-        self.parse_comment_attrs(&mut rs.comments, &s.attrs)?;
+        let mut rs = RustStruct::new(get_ident(Some(&s.ident), &s.attrs, &self.serde_rename_all));
+        rs.attrs.parse(&s.attrs);
+        // self.parse_comment_attrs(&mut rs.comments, &s.attrs)?;
 
         for f in s.fields.iter() {
             self.parse_field(&mut rs, &f)?;
@@ -118,14 +124,9 @@ impl<'l> Generator<'l> {
             ty = &remove_prefix_suffix(&ty, VEC_PREFIX, VEC_SUFFIX);
         }
 
-        let mut rf = RustField {
-            id: get_ident(f.ident.as_ref(), &f.attrs, &self.serde_rename_all),
-            comments: Vec::new(),
-            ty: ty.to_owned(),
-            is_optional,
-            is_vec,
-        };
-        self.parse_comment_attrs(&mut rf.comments, &f.attrs)?;
+        let mut rf = RustField::new(get_ident(f.ident.as_ref(), &f.attrs, &self.serde_rename_all), ty, is_optional, is_vec);
+        rf.attrs.parse(&f.attrs);
+        // self.parse_comment_attrs(&mut rf.comments, &f.attrs)?;
 
         rs.fields.push(rf);
         Ok(())
@@ -150,21 +151,21 @@ impl<'l> Generator<'l> {
         let mut re = RustConstEnum {
             id: get_ident(Some(&e.ident), &e.attrs, &self.serde_rename_all),
             comments: Vec::new(),
-            typeshare_attrs: HashMap::new(),
+            attrs: RustAttrs::new(),
             ty: get_const_enum_type(e).clone(),
             consts: Vec::new(),
         };
-        self.parse_comment_attrs(&mut re.comments, &e.attrs)?;
-        self.parse_typeshare_attrs(&mut re.typeshare_attrs, &e.attrs)?
+        re.attrs.parse(&e.attrs);
+        // self.parse_comment_attrs(&mut re.comments, &e.attrs)?;
 
         for v in e.variants.iter() {
             let mut rc = RustConst {
                 id: get_ident(Some(&v.ident), &v.attrs, &self.serde_rename_all),
-                value: get_discriminant(&v),
                 comments: Vec::new(),
+                attrs: RustAttrs::new(),
+                value: get_discriminant(&v),
             };
-
-            self.parse_comment_attrs(&mut rc.comments, &v.attrs)?;
+            rc.attrs.parse(&v.attrs);
             re.consts.push(rc);
         }
 
@@ -388,28 +389,3 @@ fn parse_comment_attrs(comments: &mut Vec<String>, attrs: &[syn::Attribute]) -> 
 // }
 
 
-fn parse_attrs(attrs: &[syn::Attribute]) -> HashMap<HashMap<String, String>> {
-    let mut result = HashMap::new(HashMap<String, String>);
-    for a in attrs {
-        if let Some(segment) = a.path.segments.iter().next() {
-            let key = segment.ident.to_string();
-            if let Some(mut map) = result.get_mut
-
-
-            if segment.ident != Ident::new("serde", Span::call_site()) {
-                continue;
-            }
-
-            let attr_as_string = a.tts.to_string();
-            let values = parse_attr(&attr_as_string)?;
-
-            for v in values {
-                if v.starts_with(prefix) && v.ends_with(suffix) {
-                    return Some(remove_prefix_suffix(&v, prefix, suffix).to_string());
-                }
-            }
-        }
-    }
-
-   
-}

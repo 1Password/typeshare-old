@@ -1,6 +1,7 @@
 use std::io::Write;
 
-use crate::language::{Language, Params, RustConstEnum, RustStruct};
+use crate::parser::{RustConstEnum, RustStruct};
+use crate::language::{Language, Params};
 
 pub struct TypeScript {}
 

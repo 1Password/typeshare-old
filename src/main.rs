@@ -1,5 +1,6 @@
 use clap::{App, Arg};
 
+mod parser;
 mod language;
 mod swift;
 mod typescript;
