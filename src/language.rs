@@ -13,6 +13,9 @@ const OPTION_SUFFIX: &str = " >";
 const VEC_PREFIX: &str = "Vec < ";
 const VEC_SUFFIX: &str = " >";
 
+const HASH_MAP_PREFIX: &str = "HashMap < ";
+const HASH_MAP_SUFFIX: &str = " >";
+
 /// Identifier used in Rust structs, enums, and fields. It includes the `original` name and the `renamed` value after the transformation based on `serde` attributes.
 #[derive(Clone)]
 pub struct Id {
@@ -43,6 +46,7 @@ pub struct RustField {
     pub ty: String,
     pub is_optional: bool,
     pub is_vec: bool,
+    pub is_hash_map: bool,
     pub comments: Vec<String>,
 }
 
@@ -188,8 +192,11 @@ impl<'l> Generator<'l> {
         }
 
         let is_vec = ty.starts_with(VEC_PREFIX);
+        let is_hash_map = ty.starts_with(HASH_MAP_PREFIX);
         if is_vec {
             ty = &remove_prefix_suffix(&ty, VEC_PREFIX, VEC_SUFFIX);
+        } else if is_hash_map {
+            ty = &remove_prefix_suffix(&ty, HASH_MAP_PREFIX, HASH_MAP_SUFFIX);
         }
 
         let mut rf = RustField {
@@ -197,6 +204,7 @@ impl<'l> Generator<'l> {
             ty: ty.to_owned(),
             is_optional,
             is_vec,
+            is_hash_map,
             comments: Vec::new(),
         };
         self.parse_comment_attrs(&mut rf.comments, &f.attrs)?;
@@ -313,8 +321,11 @@ fn get_algebraic_enum_case_value(v: &syn::Variant, serde_rename_all: &Option<Str
             }
 
             let is_vec = ty.starts_with(VEC_PREFIX);
+            let is_hash_map = ty.starts_with(HASH_MAP_PREFIX);
             if is_vec {
                 ty = &remove_prefix_suffix(&ty, VEC_PREFIX, VEC_SUFFIX);
+            } else if is_hash_map {
+                ty = &remove_prefix_suffix(&ty, HASH_MAP_PREFIX, HASH_MAP_SUFFIX);
             }
 
             return RustField {
@@ -322,6 +333,7 @@ fn get_algebraic_enum_case_value(v: &syn::Variant, serde_rename_all: &Option<Str
                 ty: ty.to_owned(),
                 is_optional,
                 is_vec,
+                is_hash_map,
                 comments: Vec::new(),
             };
         }
