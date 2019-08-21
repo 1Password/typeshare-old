@@ -328,14 +328,14 @@ fn get_algebraic_enum_case_value(v: &syn::Variant, serde_rename_all: &Option<Str
                 ty = &remove_prefix_suffix(&ty, HASH_MAP_PREFIX, HASH_MAP_SUFFIX);
             }
 
-            return RustField {
+            RustField {
                 id: get_ident(Some(&v.ident), &v.attrs, serde_rename_all),
                 ty: ty.to_owned(),
                 is_optional,
                 is_vec,
                 is_hash_map,
                 comments: Vec::new(),
-            };
+            }
         }
         _ => panic!("Call this method for Unnamed cases only"),
     }
