@@ -10,6 +10,7 @@ fn can_generate_simple_struct_with_a_comment() {
         Params {
             use_marker: false,
             swift_prefix: "".to_string(),
+            java_package: "".to_string(),
         },
     );
 
@@ -59,6 +60,7 @@ fn can_handle_serde_rename() {
         Params {
             use_marker: false,
             swift_prefix: "".to_string(),
+            java_package: "".to_string(),
         },
     );
 
@@ -110,6 +112,7 @@ fn can_handle_serde_rename_all() {
         Params {
             use_marker: false,
             swift_prefix: "".to_string(),
+            java_package: "".to_string(),
         },
     );
 
@@ -177,6 +180,7 @@ fn can_generate_simple_enum() {
         Params {
             use_marker: false,
             swift_prefix: "".to_string(),
+            java_package: "".to_string(),
         },
     );
 
@@ -224,6 +228,7 @@ fn can_generate_algebraic_enum() {
         Params {
             use_marker: false,
             swift_prefix: "".to_string(),
+            java_package: "".to_string(),
         },
     );
 
