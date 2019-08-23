@@ -1,6 +1,6 @@
 use syn;
 
-use proc_macro2::{TokenTree, TokenStream};
+use proc_macro2::{TokenStream, TokenTree};
 use std::collections::HashMap;
 
 /// Identifier used in Rust structs, enums, and fields. It includes the `original` name and the `renamed` value after the transformation based on `serde` attributes.
@@ -31,7 +31,7 @@ pub struct RustStruct {
 impl RustStruct {
     pub fn new(id: Id) -> Self {
         Self {
-            id: id,
+            id,
             comments: Vec::new(),
             attrs: RustAttrs::new(),
             fields: Vec::new(),
@@ -52,12 +52,12 @@ pub struct RustField {
 impl RustField {
     pub fn new(id: Id, ty: &str, is_optional: bool, is_vec: bool) -> Self {
         Self {
-            id: id,
+            id,
             comments: Vec::new(),
             attrs: RustAttrs::new(),
             ty: ty.to_owned(),
             is_optional,
-            is_vec
+            is_vec,
         }
     }
 }
@@ -70,7 +70,6 @@ pub struct RustConstEnum {
     pub ty: Option<syn::Lit>,
     pub consts: Vec<RustConst>,
 }
-
 
 /// Single constant in an enum.
 pub struct RustConst {
@@ -86,9 +85,7 @@ pub struct RustAttrs {
 
 impl RustAttrs {
     pub fn new() -> Self {
-        Self {
-            attrs: HashMap::new(),
-        }
+        Self { attrs: HashMap::new() }
     }
 
     pub fn comments() -> Option<Vec<String>> {
@@ -101,18 +98,20 @@ impl RustAttrs {
 
     pub fn parse(&mut self, attrs: &[syn::Attribute]) {
         for a in attrs {
-            if let Some(segment) = a.path.segments.iter().next() {
-                let key = segment.ident.to_string();
-                println!("key: {}", key);
-                if let Some(v) = self.attrs.get_mut(&key) {
-                    v.parse(&mut a.tts.into_iter());
-                } else {
-                    let mut v = RustAttrValues::new();
-                    v.parse(&mut a.tts.into_iter());
-                    self.attrs.insert(key, v);
-                }
-            } else {
-            }
+            let meta = a.parse_meta();
+            println!("{:?}", meta);
+            // if let Some(segment) = a.path.segments.iter().next() {
+            //     let key = segment.ident.to_string();
+            //     println!("key: {}", key);
+            //     if let Some(v) = self.attrs.get_mut(&key) {
+            //         v.parse(&mut a.tts.into_iter());
+            //     } else {
+            //         let mut v = RustAttrValues::new();
+            //         v.parse(&mut a.tts.into_iter());
+            //         self.attrs.insert(key, v);
+            //     }
+            // } else {
+            // }
         }
     }
 }
@@ -135,17 +134,16 @@ impl RustAttrValues {
             match token {
                 TokenTree::Punct(p) => {
                     println!("Punct {:?}", p);
-                },
+                }
                 TokenTree::Group(g) => {
                     println!("Group: {:?}", g);
-                },
+                }
                 TokenTree::Ident(g) => {
                     println!("Ident: {:?}", g);
-                },
+                }
                 TokenTree::Literal(g) => {
                     println!("Literal: {:?}", g);
-                },
-
+                }
             }
         }
     }
