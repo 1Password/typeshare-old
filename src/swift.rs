@@ -25,6 +25,8 @@ fn swift_type(s: &str) -> &str {
         "isize" => "Int",
         "usize" => "UInt",
         "bool" => "Bool",
+        "f32" => "Float",
+        "f64" => "Double",
         _ => s,
     }
 }
