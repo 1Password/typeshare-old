@@ -2,6 +2,7 @@ use std::io::Write;
 
 use crate::language::{Language, Params, RustAlgebraicEnum, RustConstEnum, RustStruct};
 
+#[derive(Default)]
 pub struct Swift {}
 
 impl Swift {
@@ -226,7 +227,7 @@ fn write_comment(w: &mut dyn Write, indent: usize, comment: &str) -> std::io::Re
     Ok(())
 }
 
-fn write_comments(w: &mut dyn Write, indent: usize, comments: &Vec<String>) -> std::io::Result<()> {
+fn write_comments(w: &mut dyn Write, indent: usize, comments: &[String]) -> std::io::Result<()> {
     for c in comments {
         write_comment(w, indent, &c)?;
     }

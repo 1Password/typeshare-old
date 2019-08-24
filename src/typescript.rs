@@ -35,6 +35,16 @@ impl Language for TypeScript {
             write_comments(w, 1, &rf.comments)?;
             if rf.is_vec {
                 writeln!(w, "\t{}{}: {}[];", rf.id.renamed, option_symbol(rf.is_optional), typescript_type(&rf.ty))?;
+            } else if rf.is_hash_map {
+                let map_types: Vec<&str> = rf.ty.split(',').map(|v| v.trim()).collect();
+                writeln!(
+                    w,
+                    "\t{}{}: Map<{}, {}>;",
+                    rf.id.renamed,
+                    option_symbol(rf.is_optional),
+                    typescript_type(map_types.get(0).ok_or(std::io::ErrorKind::InvalidInput)?),
+                    typescript_type(map_types.get(1).ok_or(std::io::ErrorKind::InvalidInput)?)
+                )?;
             } else {
                 writeln!(w, "\t{}{}: {};", rf.id.renamed, option_symbol(rf.is_optional), typescript_type(&rf.ty))?;
             }
@@ -69,6 +79,14 @@ impl Language for TypeScript {
         for (index, case) in e.cases.iter().enumerate() {
             if case.value.is_vec {
                 write!(w, "\n\t| {}[]", typescript_type(&case.value.ty))?;
+            } else if case.value.is_hash_map {
+                let map_types: Vec<&str> = case.value.ty.split(',').map(|v| v.trim()).collect();
+                write!(
+                    w,
+                    "\n\t| Map<{}, {}>",
+                    typescript_type(map_types.get(0).ok_or(std::io::ErrorKind::InvalidInput)?),
+                    typescript_type(map_types.get(1).ok_or(std::io::ErrorKind::InvalidInput)?)
+                )?;
             } else {
                 write!(w, "\n\t| {}", typescript_type(&case.value.ty))?;
             }
@@ -127,7 +145,7 @@ fn write_comment(w: &mut dyn Write, indent: usize, inline: bool, comment: &str) 
     Ok(())
 }
 
-fn write_comments(w: &mut dyn Write, indent: usize, comments: &Vec<String>) -> std::io::Result<()> {
+fn write_comments(w: &mut dyn Write, indent: usize, comments: &[String]) -> std::io::Result<()> {
     for c in comments {
         write_comment(w, indent, false, &c)?;
     }
@@ -135,7 +153,7 @@ fn write_comments(w: &mut dyn Write, indent: usize, comments: &Vec<String>) -> s
     Ok(())
 }
 
-fn write_comments_inline(w: &mut dyn Write, comments: &Vec<String>) -> std::io::Result<()> {
+fn write_comments_inline(w: &mut dyn Write, comments: &[String]) -> std::io::Result<()> {
     for c in comments {
         write_comment(w, 1, true, &c)?;
     }
